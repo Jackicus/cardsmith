@@ -44,9 +44,7 @@ def _sniff_delimiter(text: str, suffix: str) -> str:
 def _looks_like_header(first: list[str], rest: list[list[str]]) -> bool:
     if not rest or not first:
         return True
-    # Headers are short, unique, mostly ASCII identifiers.
-    if len(set(first)) != len(first):
-        return False
+    # Headers are short, mostly ASCII identifiers (duplicates are tolerated).
     ascii_like = sum(1 for c in first if c and c.isascii() and len(c) < 30)
     return ascii_like >= max(1, len(first) // 2 + 1) and not any(c.strip().isdigit() for c in first)
 

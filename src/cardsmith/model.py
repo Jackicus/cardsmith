@@ -113,7 +113,7 @@ class Template:
         default_factory=lambda: ["Noto Sans CJK JP:Bold", "DejaVu Sans:Bold"]
     )
 
-    def copy(self) -> "Template":
+    def copy(self) -> Template:
         return copy.deepcopy(self)
 
     # -- serialisation ---------------------------------------------------
@@ -122,7 +122,7 @@ class Template:
         return {"cardsmith": 1, **d}
 
     @classmethod
-    def from_dict(cls, d: dict[str, Any]) -> "Template":
+    def from_dict(cls, d: dict[str, Any]) -> Template:
         t = cls(
             name=d.get("name", "Untitled"),
             card=_from_dict(Card, d.get("card")),
@@ -140,7 +140,7 @@ class Template:
         Path(path).write_text(tomli_w.dumps(self.to_dict()), encoding="utf-8")
 
     @classmethod
-    def load(cls, path: str | Path) -> "Template":
+    def load(cls, path: str | Path) -> Template:
         return cls.from_dict(tomllib.loads(Path(path).read_text(encoding="utf-8")))
 
 
@@ -167,27 +167,27 @@ class Printer:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, d: dict[str, Any]) -> "Printer":
+    def from_dict(cls, d: dict[str, Any]) -> Printer:
         return _from_dict(cls, d)
 
     # -- layer maths -----------------------------------------------------
     def snap_base(self, thickness: float) -> float:
         """Snap the card thickness to a whole number of layers."""
         h0, h = self.first_layer_height, self.layer_height
-        n = max(1, round((thickness - h0) / h) + 1)
+        n = max(1, _round_half_up((thickness - h0) / h) + 1)
         return round(h0 + (n - 1) * h, 4)
 
     def snap_relief(self, height: float) -> float:
         """Snap a raised height to a whole number of layers (at least one)."""
         h = self.layer_height
-        return round(max(1, round(height / h)) * h, 4)
+        return round(max(1, _round_half_up(height / h)) * h, 4)
 
     def layers_below(self, z: float) -> int:
         """Number of whole layers printed before height ``z``."""
         h0, h = self.first_layer_height, self.layer_height
         if z <= h0 + 1e-6:
             return 1 if z > 1e-6 else 0
-        return 1 + round((z - h0) / h)
+        return 1 + _round_half_up((z - h0) / h)
 
     def layer_starting_at(self, z: float) -> int:
         """1-based layer number (as shown in Cura's preview) that starts at ``z``."""
@@ -267,6 +267,10 @@ def colour_changes(template: Template, printer: Printer) -> list[ColourChange]:
                 ColourChange(printer.layer_starting_at(band.z_bottom), band.z_bottom, band.colour, band.index)
             )
     return changes
+
+
+def _round_half_up(x: float) -> int:
+    return math.floor(x + 0.5 + 1e-9)
 
 
 def is_close(a: float, b: float) -> bool:

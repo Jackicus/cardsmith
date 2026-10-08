@@ -1,0 +1,45 @@
+name: Bug report
+description: Something went wrong – a crash, a bad print, a wrong layer number.
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What did you do, what did you expect, and what happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: How to reproduce
+      description: |
+        Ideally the command you ran (e.g. `cardsmith build deck.tsv -t kanji -p "Prusa MINI"`),
+        plus the template `.toml` and a few rows of the deck that trigger it.
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: output
+    attributes:
+      label: Error output / screenshots
+      description: Traceback, `cardsmith check` output, or a slicer screenshot.
+  - type: input
+    id: version
+    attributes:
+      label: Cardsmith version
+      placeholder: "cardsmith --version"
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options: [Linux, macOS, Windows, Other]
+    validations:
+      required: true
+  - type: input
+    id: slicer
+    attributes:
+      label: Printer and slicer (if print-related)
+      placeholder: "Ender-3 V2, Cura 5.8, 0.2 mm layers"

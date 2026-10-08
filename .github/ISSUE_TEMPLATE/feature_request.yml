@@ -1,0 +1,26 @@
+name: Feature request
+description: Suggest an idea – a new filter, printer preset, template, export option…
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do?
+      description: The card or workflow you have in mind, and what gets in the way today.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: Proposed solution
+      description: How you imagine it working (template option, CLI flag, GUI control…).
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives / workarounds
+  - type: checkboxes
+    id: help
+    attributes:
+      label: Contributing
+      options:
+        - label: I'd be willing to open a pull request for this

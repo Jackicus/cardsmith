@@ -1,0 +1,28 @@
+cardsmith = 1
+name = "Minimal big text"
+# Just the word, raised on a plain square card: two colours, one swap.
+palette = ["#F4EFE6", "#1F2A44"]
+fallback_fonts = ["Noto Sans CJK JP:Bold", "DejaVu Sans:Bold"]
+
+[card]
+width = 50.0
+height = 50.0
+thickness = 1.2
+corner_radius = 4.0
+padding = 4.0
+
+[border]
+enabled = false
+
+[hole]
+enabled = false
+
+[[slots]]
+name = "Word"
+text = "{word}"
+font = "Noto Sans CJK JP:Black"
+size = 34.0
+height = 0.6
+y = 25.0
+fit = "shrink"
+min_size = 10.0

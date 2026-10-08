@@ -1,0 +1,58 @@
+cardsmith = 1
+name = "Language pair"
+# Card, accent (border + word-type tag), text (base upwards).
+palette = ["#FDF6E3", "#C8553D", "#22333B"]
+fallback_fonts = ["Noto Sans CJK JP:Bold", "DejaVu Sans:Bold"]
+
+[card]
+width = 86.0
+height = 54.0
+thickness = 1.2
+corner_radius = 4.0
+padding = 4.0
+
+[border]
+enabled = true
+width = 1.4
+inset = 1.2
+height = 0.4
+around_hole = true
+
+[hole]
+enabled = true
+diameter = 4.5
+position = "top-left"
+offset = 7.0
+
+[[slots]]
+name = "Word"
+text = "{spanish}"
+font = "Noto Sans CJK JP:Black"
+size = 14.0
+height = 0.6
+y = 21.0
+max_width = 62.0
+fit = "shrink"
+min_size = 9.0
+
+[[slots]]
+name = "Translation"
+text = "{english}"
+font = "Noto Sans CJK JP:Bold"
+size = 7.0
+height = 0.6
+y = 35.5
+fit = "shrink"
+min_size = 5.0
+
+# Raised to the border height, so it prints in the accent colour.
+[[slots]]
+name = "Type"
+text = "{type|upper}"
+font = "Noto Sans CJK JP:Bold"
+size = 4.5
+height = 0.4
+y = 45.5
+letter_spacing = 0.6
+fit = "shrink"
+min_size = 4.0

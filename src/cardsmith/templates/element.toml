@@ -1,0 +1,64 @@
+cardsmith = 1
+name = "Periodic table element"
+# Classic element tile: card, border, text (base upwards).
+palette = ["#FFFFFF", "#E07A1F", "#1B263B"]
+fallback_fonts = ["Noto Sans CJK JP:Bold", "DejaVu Sans:Bold"]
+
+[card]
+width = 50.0
+height = 50.0
+thickness = 1.2
+corner_radius = 2.5
+padding = 4.0
+
+[border]
+enabled = true
+width = 1.4
+inset = 1.0
+height = 0.4
+around_hole = true
+
+[hole]
+enabled = false
+
+[[slots]]
+name = "Number"
+text = "{number}"
+font = "Noto Sans CJK JP:Bold"
+size = 6.0
+height = 0.6
+y = 9.0
+align = "left"
+x_offset = 0.8
+fit = "shrink"
+min_size = 4.5
+
+[[slots]]
+name = "Symbol"
+text = "{symbol}"
+font = "Noto Sans CJK JP:Black"
+size = 19.0
+height = 0.6
+y = 21.5
+fit = "shrink"
+min_size = 14.0
+
+[[slots]]
+name = "Name"
+text = "{name}"
+font = "Noto Sans CJK JP:Bold"
+size = 5.5
+height = 0.6
+y = 36.0
+fit = "shrink"
+min_size = 4.0
+
+[[slots]]
+name = "Mass"
+text = "{mass}"
+font = "Noto Sans CJK JP:Black"
+size = 4.8
+height = 0.6
+y = 42.8
+fit = "shrink"
+min_size = 4.0

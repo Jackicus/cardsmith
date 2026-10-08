@@ -6,7 +6,7 @@ import struct
 import zipfile
 from dataclasses import dataclass
 from pathlib import Path
-from xml.sax.saxutils import escape
+from xml.sax.saxutils import escape, quoteattr
 
 import manifold3d as mf
 import numpy as np
@@ -55,7 +55,7 @@ class MeshData:
     triangles: np.ndarray  # (m, 3) int
 
     @classmethod
-    def of(cls, m: mf.Manifold) -> "MeshData":
+    def of(cls, m: mf.Manifold) -> MeshData:
         mesh = m.to_mesh()
         v = np.asarray(mesh.vert_properties, dtype=np.float64)[:, :3]
         t = np.asarray(mesh.tri_verts, dtype=np.int64)
@@ -116,12 +116,12 @@ def write_3mf(path: str | Path, objects: list[tuple[str, MeshData, str | None]],
     if has_colour:
         out.append('  <basematerials id="1">')
         for i, (name, _, c) in enumerate(objects):
-            out.append(f'   <base name="{escape(name)}" displaycolor="{(c or "#CCCCCC").upper()}FF"/>')
+            out.append(f'   <base name={quoteattr(name)} displaycolor="{(c or "#CCCCCC").upper()}FF"/>')
         out.append("  </basematerials>")
     for i, (name, mesh, _) in enumerate(objects):
         oid = i + 2
         attrs = f' pid="1" pindex="{i}"' if has_colour else ""
-        out.append(f'  <object id="{oid}" type="model" name="{escape(name)}"{attrs}>')
+        out.append(f'  <object id="{oid}" type="model" name={quoteattr(name)}{attrs}>')
         out.append("   <mesh>")
         out.append("    <vertices>")
         out.extend(f'     <vertex x="{x:.4f}" y="{y:.4f}" z="{z:.4f}"/>' for x, y, z in mesh.vertices)

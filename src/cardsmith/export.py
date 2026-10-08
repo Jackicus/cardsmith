@@ -9,8 +9,11 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from shapely.ops import unary_union
+
 from . import mesh as ms
 from . import plate as pl
+from .colours import colour_name
 from .layout import CardLayout, layout_card
 from .model import ColourChange, Printer, Template, colour_changes, height_bands
 
@@ -50,11 +53,28 @@ def safe_name(s: str, limit: int = 40) -> str:
 
 
 def card_bands(lay: CardLayout) -> dict[int, ms.mf.Manifold]:
-    """Solids of one card grouped by colour band, in the card's own frame."""
+    """Solids of one card grouped by colour band, in the card's own frame.
+
+    Raised parts of different bands never overlap: where text touches the
+    border, the taller part keeps the footprint, so per-colour objects are
+    clean for multi-material slicers.
+    """
     groups: dict[int, list] = {}
     for f in lay.features:
-        groups.setdefault(f.band, []).append(ms.extrude(f.geom, f.z0, f.z1))
-    return {b: ms.union(parts) for b, parts in groups.items()}
+        groups.setdefault(f.band, []).append(f)
+    out: dict[int, ms.mf.Manifold] = {}
+    taken = None
+    for b in sorted(groups, reverse=True):
+        feats = groups[b]
+        if b == 0:
+            out[b] = ms.union([ms.extrude(f.geom, f.z0, f.z1) for f in feats])
+            continue
+        geom = unary_union([f.geom for f in feats])
+        if taken is not None:
+            geom = geom.difference(taken)
+        taken = geom if taken is None else taken.union(geom)
+        out[b] = ms.extrude(geom, min(f.z0 for f in feats), max(f.z1 for f in feats))
+    return out
 
 
 def card_solid(lay: CardLayout) -> ms.mf.Manifold:
@@ -196,13 +216,16 @@ def export_deck(
 def colour_plan_lines(template: Template, printer: Printer) -> list[str]:
     bands = height_bands(template, printer)
     changes = {c.band: c for c in colour_changes(template, printer)}
-    lines = [f"Start with **{bands[0].colour}** – card base, layers 1–"
+    def name(c: str) -> str:
+        return f"{colour_name(c)} ({c})"
+
+    lines = [f"Start with **{name(bands[0].colour)}** – card base, layers 1–"
              f"{printer.layers_below(bands[0].z_top)} (0 – {bands[0].z_top:g} mm)"]
     for b in bands[1:]:
         what = ", ".join(b.features)
         c = changes.get(b.index)
         if c:
-            lines.append(f"Layer **{c.layer}** (z = {c.z:g} mm): swap to **{b.colour}** – {what} "
+            lines.append(f"Layer **{c.layer}** (z = {c.z:g} mm): swap to **{name(b.colour)}** – {what} "
                          f"(up to {b.z_top:g} mm)")
         else:
             lines.append(f"{what} (up to {b.z_top:g} mm) keeps the same colour – no swap")

@@ -46,7 +46,7 @@ Issues = "https://github.com/Jackicus/cardsmith/issues"
 where = ["src"]
 
 [tool.setuptools.package-data]
-cardsmith = ["templates/*.toml", "fonts/*", "gui/*.svg", "gui/*.png"]
+cardsmith = ["templates/*.toml", "samples/*", "fonts/*", "gui/*.svg", "gui/*.png"]
 
 [tool.ruff]
 line-length = 110
@@ -54,7 +54,7 @@ target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B"]
-ignore = ["E501"]
+ignore = ["E501", "B905", "B008", "B007"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -1,0 +1,64 @@
+cardsmith = 1
+name = "Vocab with furigana"
+# Card, border, text (base upwards).
+palette = ["#F4EFE6", "#2A9D8F", "#1F2A44"]
+fallback_fonts = ["Noto Sans CJK JP:Bold", "DejaVu Sans:Bold"]
+
+[card]
+width = 86.0
+height = 54.0
+thickness = 1.2
+corner_radius = 4.0
+padding = 4.0
+
+[border]
+enabled = true
+width = 1.4
+inset = 1.2
+height = 0.4
+around_hole = true
+
+[hole]
+enabled = true
+diameter = 4.5
+position = "top-left"
+offset = 7.0
+
+# Word with Anki-style furigana, e.g. 食[た]べ 物[もの]. Kana-only words
+# (no brackets) are simply printed big.
+[[slots]]
+name = "Word"
+text = "{furigana}"
+font = "Noto Sans CJK JP:Bold"
+size = 16.0
+height = 0.6
+y = 23.0
+max_width = 56.0
+fit = "shrink"
+min_size = 10.0
+ruby = true
+ruby_scale = 0.45
+ruby_gap = 0.6
+
+[[slots]]
+name = "Meaning"
+text = "{meaning}"
+font = "Noto Sans CJK JP:Bold"
+size = 6.5
+height = 0.6
+y = 42.5
+fit = "wrap"
+max_lines = 2
+min_size = 4.5
+
+[[slots]]
+name = "Tag"
+text = "{jlpt}"
+font = "Noto Sans CJK JP:Bold"
+size = 4.5
+height = 0.6
+y = 9.5
+align = "right"
+x_offset = 2.5
+fit = "shrink"
+min_size = 4.0

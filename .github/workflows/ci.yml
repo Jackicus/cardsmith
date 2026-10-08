@@ -36,3 +36,14 @@ jobs:
 
       - name: Test
         run: pytest -q
+
+      - name: Build a sample plate
+        if: matrix.python-version == '3.13'
+        run: cardsmith build examples/japanese/jlpt-n5-kanji.tsv -t kanji --limit 7 -o sample-plate
+
+      - name: Upload sample plate
+        if: matrix.python-version == '3.13'
+        uses: actions/upload-artifact@v4
+        with:
+          name: sample-kanji-plate
+          path: sample-plate

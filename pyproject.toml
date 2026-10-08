@@ -1,0 +1,60 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cardsmith"
+version = "0.1.0"
+description = "Turn spreadsheets into multi-colour, 3D-printable flashcards – kanji, vocab or anything else."
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.11"
+authors = [{ name = "Jack Tully" }]
+keywords = ["3d-printing", "flashcards", "kanji", "japanese", "anki", "cura", "stl", "3mf"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: X11 Applications :: Qt",
+    "Intended Audience :: End Users/Desktop",
+    "Natural Language :: Japanese",
+    "Programming Language :: Python :: 3",
+    "Topic :: Multimedia :: Graphics :: 3D Modeling",
+    "Topic :: Education",
+]
+dependencies = [
+    "fonttools>=4.40",
+    "shapely>=2.0",
+    "manifold3d>=3.0",
+    "numpy>=1.24",
+    "tomli-w>=1.0",
+]
+
+[project.optional-dependencies]
+gui = ["PySide6>=6.6"]
+dev = ["pytest>=8", "ruff>=0.5"]
+
+[project.scripts]
+cardsmith = "cardsmith.cli:main"
+
+[project.gui-scripts]
+cardsmith-gui = "cardsmith.gui.app:main"
+
+[project.urls]
+Homepage = "https://github.com/Jackicus/cardsmith"
+Issues = "https://github.com/Jackicus/cardsmith/issues"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+cardsmith = ["templates/*.toml", "fonts/*", "gui/*.svg", "gui/*.png"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B"]
+ignore = ["E501"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

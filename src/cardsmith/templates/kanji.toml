@@ -1,0 +1,67 @@
+cardsmith = 1
+name = "Kanji flashcard"
+palette = ["#F4EFE6", "#C0392B", "#1F2A44"]
+fallback_fonts = ["Noto Sans CJK JP:Bold", "DejaVu Sans:Bold"]
+
+[card]
+width = 54.0
+height = 86.0
+thickness = 1.2
+corner_radius = 4.0
+padding = 3.5
+
+[border]
+enabled = true
+width = 1.4
+inset = 1.2
+height = 0.4
+around_hole = true
+
+[hole]
+enabled = true
+diameter = 4.5
+position = "top-left"
+offset = 7.0
+
+[[slots]]
+name = "Word"
+text = "{word}"
+font = "Noto Sans CJK JP:Bold"
+size = 24.0
+height = 0.6
+y = 33.0
+fit = "shrink"
+min_size = 9.0
+
+[[slots]]
+name = "Reading"
+text = "{reading}"
+font = "Noto Sans CJK JP:Bold"
+size = 7.0
+height = 0.6
+y = 53.0
+fit = "shrink"
+min_size = 4.5
+
+[[slots]]
+name = "Meaning"
+text = "{meaning}"
+font = "Noto Sans CJK JP:Bold"
+size = 5.5
+height = 0.6
+y = 66.0
+fit = "wrap"
+max_lines = 2
+min_size = 4.0
+
+[[slots]]
+name = "Tag"
+text = "{jlpt}"
+font = "Noto Sans CJK JP:Bold"
+size = 4.5
+height = 0.6
+y = 9.0
+align = "right"
+x_offset = 3.0
+fit = "shrink"
+min_size = 3.5

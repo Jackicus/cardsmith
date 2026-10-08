@@ -89,7 +89,7 @@ class Binder:
         def on(v):
             o = getobj()
             if o is not None and getattr(o, attr) != v:
-                setattr(o, attr, type(getattr(o, attr))(v))
+                setattr(o, attr, int(v) if isinstance(w, QSpinBox) else float(v))
                 self.changed()
         w.valueChanged.connect(on)
         self.items.append((w, getobj, attr))
@@ -243,15 +243,15 @@ class CardPanel(Panel):
 
 
 CARD_PRESETS = [
-    ("Credit card", (54, 85.6)),
-    ("Business card", (55, 91)),
+    ("Credit card", (54.0, 85.6)),
+    ("Business card", (55.0, 91.0)),
     ("Poker card", (63.5, 88.9)),
-    ("Mini card", (44, 63)),
-    ("Tarot", (70, 120)),
-    ("Square 50", (50, 50)),
-    ("Square 64", (64, 64)),
-    ("Tag", (30, 60)),
-    ("Domino", (25, 50)),
+    ("Mini card", (44.0, 63.0)),
+    ("Tarot", (70.0, 120.0)),
+    ("Square 50", (50.0, 50.0)),
+    ("Square 64", (64.0, 64.0)),
+    ("Tag", (30.0, 60.0)),
+    ("Domino", (25.0, 50.0)),
 ]
 
 

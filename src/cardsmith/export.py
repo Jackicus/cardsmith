@@ -52,6 +52,14 @@ def safe_name(s: str, limit: int = 40) -> str:
     return s[:limit] or "card"
 
 
+def _clear(folder: Path, patterns: tuple[str, ...]) -> None:
+    """Remove files from an earlier export so no stale plates are left behind."""
+    for pat in patterns:
+        for f in folder.glob(pat):
+            if f.is_file():
+                f.unlink()
+
+
 def card_bands(lay: CardLayout) -> dict[int, ms.mf.Manifold]:
     """Solids of one card grouped by colour band, in the card's own frame.
 
@@ -89,7 +97,10 @@ def export_deck(
     options: ExportOptions | None = None,
     progress: Progress | None = None,
     cancelled: Callable[[], bool] | None = None,
+    total_arg: int | None = None,
 ) -> ExportResult:
+    """Export ``rows`` (``(deck_index, row)`` pairs). ``total_arg`` is the deck size
+    used for ``{##}``; it defaults to the number of rows exported."""
     t0 = time.monotonic()
     options = options or ExportOptions()
     out = Path(out_dir)
@@ -102,6 +113,7 @@ def export_deck(
             raise Cancelled()
 
     total = len(rows)
+    deck_total = total if total_arg is None else total_arg
     if total == 0:
         raise ValueError("No cards selected to export.")
     packing = pl.pack(template.card.width, template.card.height, printer)
@@ -119,7 +131,7 @@ def export_deck(
     layouts: list[tuple[int, CardLayout]] = []
     for n, (idx, row) in enumerate(rows):
         check()
-        lay = layout_card(template, printer, row, idx, len(rows), check_print=False)
+        lay = layout_card(template, printer, row, idx, deck_total, check_print=False)
         layouts.append((idx, lay))
         bad = [i for i in lay.issues if i.level in ("error", "warning")]
         if bad:
@@ -135,6 +147,7 @@ def export_deck(
     plates_dir = out / "plates"
     if want_plates:
         plates_dir.mkdir(exist_ok=True)
+        _clear(plates_dir, ("plate_*.3mf", "plate_*.stl"))
     for p, rng in enumerate(chunks, start=1):
         by_band: dict[int, list] = {}
         for k, li in enumerate(rng):
@@ -177,6 +190,7 @@ def export_deck(
     if options.singles_stl or options.singles_3mf:
         cards_dir = out / "cards"
         cards_dir.mkdir(exist_ok=True)
+        _clear(cards_dir, ("[0-9][0-9][0-9]_*.stl", "[0-9][0-9][0-9]_*.3mf"))
         for n, (idx, lay) in enumerate(layouts):
             check()
             stem = f"{idx + 1:03d}_{safe_name(lay.label)}"

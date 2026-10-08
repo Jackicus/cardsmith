@@ -304,7 +304,7 @@ class MainWindow(QMainWindow):
             path = str(sample) if sample else None
         if path:
             self._load_deck(path, quiet=True)
-            if not deck_path:
+            if not deck_path and self.deck and self.deck.source == self.qs.value("deck/path"):
                 inc = self.qs.value("deck/excluded")
                 if inc and self.deck:
                     try:
@@ -314,7 +314,8 @@ class MainWindow(QMainWindow):
                         self.deck_panel.set_deck(self.deck)
                     except (ValueError, TypeError):
                         pass
-                self.index = min(self.qs.value("deck/index", 0, type=int), max(len(self.deck or []) - 1, 0))
+                self.index = min(self.qs.value("deck/index", 0, type=int), max(len(self.deck) - 1, 0))
+                self.deck_panel.select_row(self.index)
 
     def _autosave(self) -> None:
         try:
@@ -401,6 +402,7 @@ class MainWindow(QMainWindow):
         self.dirty = False
         self._cache.clear()
         self.slots_panel._current = 0
+        self._history, self._hpos = [], -1  # undo must not cross into another file
         self._refresh_all()
         self._push_history()
         self._schedule()
@@ -432,7 +434,8 @@ class MainWindow(QMainWindow):
         if not self.deck or not self.deck.selected():
             QMessageBox.information(self, "Nothing to export", "Open a deck and select at least one card.")
             return
-        dlg = ExportDialog(self.template, self.printer, self.deck.selected(), self.deck.name, self)
+        dlg = ExportDialog(self.template, self.printer, self.deck.selected(), self.deck.name, self,
+                           total=len(self.deck.rows))
         dlg.exec()
 
     # ---------------------------------------------------------------- state
@@ -496,9 +499,9 @@ class MainWindow(QMainWindow):
         self._restoring = True
         self.template = Template.from_dict(self._history[pos])
         self._cache.clear()
+        self.dirty = True
         self._refresh_all()
         self._restoring = False
-        self.dirty = True
         self._update_undo()
         self._schedule()
 
@@ -551,6 +554,7 @@ class MainWindow(QMainWindow):
         self._save_timer.start()
 
     def _render_card(self) -> None:
+        self._generation += 1  # any check still running is now stale
         n = len(self.deck.rows) if self.deck else 0
         i = self.index
         lay = self._layout(i)
@@ -558,7 +562,7 @@ class MainWindow(QMainWindow):
         self.preview.show_card(lay, self.template, self.printer, show_issues=self.show_issues.isChecked(),
                                show_guides=self.show_guides.isChecked(),
                                selected_slot=self.slots_panel.current)
-        excluded = self.deck is not None and not self.deck.included[i]
+        excluded = self.deck is not None and i < len(self.deck.included) and not self.deck.included[i]
         self.nav_label.setText(f"Card {i + 1} of {n}  ·  {lay.label}" + ("  (not selected)" if excluded else "")
                                if n else "Template preview – open a deck to fill it")
         self.prev_btn.setEnabled(i > 0)
@@ -700,13 +704,14 @@ class MainWindow(QMainWindow):
         self.deck_issues.clear()
         self.deck_progress.show()
         self.check_btn.setText("Stop")
-        job = deck_check_job(self.template, self.printer, rows, self.thorough.isChecked())
+        job = deck_check_job(self.template, self.printer, rows, self.thorough.isChecked(), len(self.deck.rows))
         job.signals.progress.connect(lambda f, m: self.deck_progress.setValue(int(f * 1000)))
         job.signals.done.connect(self._deck_checked)
-        job.signals.failed.connect(lambda m: self._deck_checked([]))
+        job.signals.failed.connect(lambda m: self._deck_checked(([], 0, True)))
         self._deck_job = job.start()
 
-    def _deck_checked(self, results) -> None:
+    def _deck_checked(self, outcome) -> None:
+        results, checked, stopped = outcome if isinstance(outcome, tuple) else (outcome, 0, True)
         self._deck_job = None
         self.deck_progress.hide()
         self.check_btn.setText("Check every card")
@@ -718,7 +723,9 @@ class MainWindow(QMainWindow):
             it = QListWidgetItem(f"#{idx + 1}  {label}\n    {msg}")
             it.setData(Qt.ItemDataRole.UserRole, idx)
             self.deck_issues.addItem(it)
-        if not results:
+        if stopped:
+            self.deck_issues.insertItem(0, QListWidgetItem(f"Stopped after {checked} of {len(self._rows())} cards"))
+        elif not results:
             self.deck_issues.addItem(QListWidgetItem("✓  Every selected card fits"))
         self.deck_panel.model.set_flags(flags)
         self.check_tabs.setTabText(1, f"Whole deck ({len(results)})" if results else "Whole deck")

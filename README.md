@@ -173,7 +173,7 @@ Slot text can mix fields and fixed text, with filters:
 Fonts → glyph outlines (fontTools) → 2D layout and print checks (shapely) → watertight solids
 (manifold3d) → STL / 3MF. There's no CAD package in the loop: the 80-card N5 deck builds into 12
 plates in about 15 seconds. The engine has no GUI dependencies. The PySide6 app sits on top of it, and the core is
-covered by 185 tests. See [CONTRIBUTING.md](CONTRIBUTING.md).
+covered by 187 tests. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Ideas for later
 

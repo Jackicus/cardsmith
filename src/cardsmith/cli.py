@@ -67,7 +67,8 @@ def cmd_build(args) -> int:
         bar = "█" * int(f * 30)
         print(f"\r  [{bar:<30}] {msg:<40}", end="", file=sys.stderr, flush=True)
 
-    res = export_deck(template, printer, rows, out, opts, progress if sys.stderr.isatty() else None)
+    res = export_deck(template, printer, rows, out, opts, progress if sys.stderr.isatty() else None,
+                      total_arg=len(deck))
     if sys.stderr.isatty():
         print(file=sys.stderr)
     print(f"✓ {res.cards} cards → {res.plates} plate(s), {res.per_plate} per plate, in {res.seconds:.1f}s")

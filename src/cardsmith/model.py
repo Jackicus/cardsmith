@@ -36,8 +36,18 @@ def _from_dict(cls, data: dict[str, Any] | None):
     """Build a dataclass from a dict, ignoring unknown keys (forward compatible)."""
     if data is None:
         return cls()
-    names = {f.name for f in fields(cls)}
-    return cls(**{k: v for k, v in data.items() if k in names})
+    types = {f.name: f.type for f in fields(cls)}
+    out = {}
+    for k, v in data.items():
+        if k not in types:
+            continue
+        t = types[k] if isinstance(types[k], str) else getattr(types[k], "__name__", "")
+        if t == "float" and isinstance(v, int) and not isinstance(v, bool):
+            v = float(v)
+        elif t == "int" and isinstance(v, float) and v.is_integer():
+            v = int(v)
+        out[k] = v
+    return cls(**out)
 
 
 @dataclass

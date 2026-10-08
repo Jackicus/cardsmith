@@ -52,29 +52,33 @@ def check_job(template: Template, printer: Printer, row: dict, index: int, total
     return Job(work)
 
 
-def deck_check_job(template: Template, printer: Printer, rows: list[tuple[int, dict]], thorough: bool) -> Job:
+def deck_check_job(template: Template, printer: Printer, rows: list[tuple[int, dict]], thorough: bool,
+                   total: int) -> Job:
     t, p = template.copy(), Printer.from_dict(printer.to_dict())
 
     def work(job):
         out = []
+        checked = 0
         for n, (idx, row) in enumerate(rows):
             if job.cancelled:
                 break
-            lay = layout_card(t, p, row, idx, len(rows), check_print=thorough)
+            lay = layout_card(t, p, row, idx, total, check_print=thorough)
+            checked += 1
             bad = [i for i in lay.issues if i.level in ("error", "warning")]
             if bad:
                 out.append((idx, lay.label, bad))
             job.signals.progress.emit((n + 1) / len(rows), f"Checked {n + 1} of {len(rows)}")
-        return out
+        return out, checked, job.cancelled
 
     return Job(work)
 
 
-def export_job(template: Template, printer: Printer, rows, out_dir, options: ExportOptions) -> Job:
+def export_job(template: Template, printer: Printer, rows, out_dir, options: ExportOptions,
+               total: int | None = None) -> Job:
     t, p = template.copy(), Printer.from_dict(printer.to_dict())
 
     def work(job):
-        return export_deck(t, p, rows, out_dir, options,
+        return export_deck(t, p, rows, out_dir, options, total_arg=total,
                            progress=lambda f, m: job.signals.progress.emit(f, m),
                            cancelled=lambda: job.cancelled)
 

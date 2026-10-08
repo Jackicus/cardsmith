@@ -29,11 +29,13 @@ from .workers import export_job
 
 
 class ExportDialog(QDialog):
-    def __init__(self, template: Template, printer: Printer, rows, deck_name: str, parent=None) -> None:
+    def __init__(self, template: Template, printer: Printer, rows, deck_name: str, parent=None,
+                 total: int | None = None) -> None:
         super().__init__(parent)
         self.setWindowTitle("Export for printing")
         self.setMinimumSize(620, 560)
         self.template, self.printer, self.rows = template, printer, rows
+        self.total = total
         self.job = None
         self.result: ExportResult | None = None
         self.qs = QSettings()
@@ -146,7 +148,7 @@ class ExportDialog(QDialog):
         out = Path(self.folder.text()).expanduser()
         self.qs.setValue("export/root", str(out.parent))
         self.stack.setCurrentIndex(1)
-        self.job = export_job(self.template, self.printer, self.rows, out, opts)
+        self.job = export_job(self.template, self.printer, self.rows, out, opts, self.total)
         self.job.signals.progress.connect(self._progress)
         self.job.signals.done.connect(self._done)
         self.job.signals.failed.connect(self._failed)
@@ -164,6 +166,9 @@ class ExportDialog(QDialog):
     def _failed(self, msg: str) -> None:
         if msg == "cancelled":
             self.stack.setCurrentIndex(0)
+            QMessageBox.information(self, "Export cancelled",
+                                    "The export was stopped part-way, so the folder may hold an incomplete "
+                                    "set of plates. Export again before printing.")
             return
         QMessageBox.critical(self, "Export failed", msg)
         self.stack.setCurrentIndex(0)

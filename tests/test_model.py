@@ -239,3 +239,9 @@ def test_half_layer_ties_round_consistently():
     p = Printer()
     assert [p.snap_relief(x) for x in (0.3, 0.5, 0.7, 0.9)] == pytest.approx([0.4, 0.6, 0.8, 1.0])
     assert [p.snap_base(x) for x in (0.9, 1.1, 1.3)] == pytest.approx([1.0, 1.2, 1.4])
+
+
+def test_from_dict_coerces_whole_numbers_to_float():
+    t = Template.from_dict({"card": {"width": 50, "height": 70}, "slots": [{"size": 8, "y": 40, "max_lines": 2.0}]})
+    assert isinstance(t.card.width, float) and isinstance(t.slots[0].size, float)
+    assert isinstance(t.slots[0].max_lines, int)

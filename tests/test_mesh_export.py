@@ -287,3 +287,17 @@ def test_write_3mf_escapes_quotes_in_names(tmp_path):
     ms.write_3mf(f, [('Colour 2 – Say "hi"', a, "#FF0000")])
     _, root, _ = _read_model(f)
     assert root.find("m:resources/m:object", NS).get("name") == 'Colour 2 – Say "hi"'
+
+
+def test_export_removes_stale_plates_from_earlier_runs(tmp_path):
+    t = Template(slots=[])
+    rows = [(i, {}) for i in range(20)]
+    export_deck(t, Printer(), rows, tmp_path, ExportOptions(plates_colour_3mf=False))
+    many = sorted(p.name for p in (tmp_path / "plates").iterdir())
+    export_deck(t, Printer(), rows[:2], tmp_path, ExportOptions(plates_colour_3mf=False))
+    few = sorted(p.name for p in (tmp_path / "plates").iterdir())
+    assert len(many) > 1
+    assert few == ["plate_01.3mf"]
+    (tmp_path / "plates" / "notes.txt").write_text("mine")
+    export_deck(t, Printer(), rows[:2], tmp_path, ExportOptions(plates_colour_3mf=False))
+    assert (tmp_path / "plates" / "notes.txt").exists()  # only our own files are cleared

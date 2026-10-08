@@ -18,6 +18,10 @@
 
 ![Cardsmith editing a kanji card](docs/images/app-kanji.png)
 
+It's designed to be calm on first launch: a welcome card walks you through the three steps, each
+tab shows only the essentials (everything else folds away under **More**), and the card list and
+checks live in a drawer you open when you need them.
+
 ## What it does
 
 - **Any data.** Open a CSV, TSV, JSON or an Anki *Notes in Plain Text* export. Every column becomes
@@ -42,7 +46,7 @@
 </tr>
 <tr>
 <td align="center">Plate view: 7 kanji cards on a 220 mm bed, 3 of them turned</td>
-<td align="center">Vocab card with furigana</td>
+<td align="center">Vocab card with furigana, card list open</td>
 </tr>
 <tr>
 <td><img src="docs/images/app-element.png" alt="Periodic table tile"></td>
@@ -51,6 +55,14 @@
 <tr>
 <td align="center">Not just Japanese: periodic-table tiles</td>
 <td align="center">Follows your system's dark mode</td>
+</tr>
+<tr>
+<td><img src="docs/images/app-welcome.png" alt="Welcome card"></td>
+<td><img src="docs/images/export-done.png" alt="Export finished"></td>
+</tr>
+<tr>
+<td align="center">First launch</td>
+<td align="center">After export: the colour plan and Cura steps</td>
 </tr>
 </table>
 
@@ -100,6 +112,7 @@ somewhere else.
 ## Quick start
 
 1. **Open deck…** and pick your spreadsheet (or start with the bundled JLPT N5 kanji deck).
+   The **80 cards** button shows the list, where you can untick cards you don't want to print.
 2. **Text** tab: each slot is a line of raised text. Set it to `{column}` with the **{ }** button,
    then pick a font, size and height. Drag it into place in the preview.
 3. **Card** tab: size (presets included), thickness, corner radius, border and hole.

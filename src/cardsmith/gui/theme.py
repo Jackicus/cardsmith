@@ -96,6 +96,19 @@ def stylesheet(c: dict[str, str]) -> str:
     QMainWindow, QDialog {{ background: {c['window']}; }}
     QToolTip {{ background: {c['panel']}; color: {c['text']}; border: 1px solid {c['border']};
                 padding: 6px; border-radius: 6px; }}
+    QToolButton::menu-indicator, QPushButton::menu-indicator {{ image: none; width: 0; }}
+    QFrame#Collapsible {{ background: {c['panel']}; border: 1px solid {c['border']}; border-radius: 10px; }}
+    QToolButton#SectionHeader {{ border: none; background: transparent; font-weight: 600; padding: 6px 2px;
+                                 text-align: left; }}
+    QToolButton#SectionHeader:hover {{ color: {ACCENT}; }}
+    QToolButton#SectionHeader:checked {{ background: transparent; color: {c['text']}; }}
+    QPushButton#Pill {{ border-radius: 14px; padding: 5px 14px; font-weight: 600; }}
+    QPushButton#PillOk {{ border-radius: 14px; padding: 5px 14px; font-weight: 600; color: #2E7D32;
+                          border-color: rgba(46,125,50,90); }}
+    QPushButton#PillWarn {{ border-radius: 14px; padding: 5px 14px; font-weight: 600; color: #B9471F;
+                            border-color: {ACCENT}; background: rgba(224,83,61,24); }}
+    QFrame#Welcome {{ background: {c['panel']}; border: 1px solid {c['border']}; border-radius: 16px; }}
+    QLabel#Step {{ background: {ACCENT}; color: white; border-radius: 13px; font-weight: 700; }}
     QWidget#Panel {{ background: {c['panel']}; border: 1px solid {c['border']}; border-radius: 10px; }}
     QLabel#Title {{ font-size: 15px; font-weight: 600; }}
     QLabel#Muted, QLabel[muted="true"] {{ color: {c['muted']}; }}

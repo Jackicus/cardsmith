@@ -6,13 +6,15 @@ import json
 import sys
 from pathlib import Path
 
-from PySide6.QtCore import QByteArray, QSettings, QSize, Qt, QTimer
+from PySide6.QtCore import QByteArray, QSettings, QSignalBlocker, QSize, Qt, QTimer
 from PySide6.QtGui import QAction, QIcon, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QApplication,
     QButtonGroup,
     QCheckBox,
     QFileDialog,
+    QFrame,
+    QGridLayout,
     QHBoxLayout,
     QLabel,
     QListWidget,
@@ -127,7 +129,7 @@ class MainWindow(QMainWindow):
             b = QPushButton(label)
             b.setCheckable(True)
             b.setChecked(i == 0)
-            b.setToolTip("Preview one card" if i == 0 else "Preview how cards are laid out on the bed")
+            b.setToolTip("Preview one card" if i == 0 else "See how the cards fit on your print bed")
             self.mode_group.addButton(b, i)
             bar.addWidget(b)
         self.mode_group.idClicked.connect(self._set_mode)
@@ -139,51 +141,75 @@ class MainWindow(QMainWindow):
         bar.addWidget(self.prev_btn)
         bar.addWidget(self.next_btn)
         bar.addWidget(self.nav_label, 1)
-        self.show_issues = QCheckBox("Print problems")
-        self.show_issues.setChecked(True)
+        self.deck_btn = QPushButton("Cards")
+        self.deck_btn.setCheckable(True)
+        self.deck_btn.setToolTip("Show the list of cards – pick which ones to print")
+        self.deck_btn.toggled.connect(lambda on: self._show_drawer(on, 0))
+        bar.addWidget(self.deck_btn)
+        view = QToolButton(text="View ▾")
+        view.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        vm = QMenu(self)
+        self.show_issues = QAction("Highlight print problems", self, checkable=True, checked=True)
         self.show_issues.setToolTip("Red: strokes thinner than the nozzle. Orange: gaps that may fill in.")
-        self.show_guides = QCheckBox("Guides")
-        self.show_guides.setChecked(True)
-        self.show_guides.setToolTip("Show the padding (safe area)")
-        for c in (self.show_issues, self.show_guides):
-            c.toggled.connect(lambda _: self._render())
-            bar.addWidget(c)
-        fit = QToolButton(text="Fit", toolTip="Fit to window (double-click the preview)")
-        bar.addWidget(fit)
+        self.show_guides = QAction("Show safe area", self, checkable=True, checked=True)
+        for a in (self.show_issues, self.show_guides):
+            a.toggled.connect(lambda _: self._render())
+            vm.addAction(a)
+        vm.addSeparator()
+        vm.addAction("Fit to window", lambda: self.preview.fit())
+        vm.addAction("Show the welcome again", lambda: self._show_welcome(True))
+        view.setMenu(vm)
+        bar.addWidget(view)
         cv.addLayout(bar)
+
+        stage = QWidget()
+        grid = QGridLayout(stage)
+        grid.setContentsMargins(0, 0, 0, 0)
         self.preview = Preview()
-        fit.clicked.connect(self.preview.fit)
         self.preview.slotClicked.connect(self._preview_slot_clicked)
         self.preview.slotDragged.connect(self._preview_drag)
         self.preview.dragFinished.connect(self._drag_done)
-        cv.addWidget(self.preview, 1)
-        self.hint = QLabel("Drag text to move it · scroll to zoom · drag the background to pan")
+        grid.addWidget(self.preview, 0, 0)
+        self.welcome = self._build_welcome()
+        grid.addWidget(self.welcome, 0, 0, Qt.AlignmentFlag.AlignCenter)
+        cv.addWidget(stage, 1)
+
+        foot = QHBoxLayout()
+        self.pill = QPushButton("✓  Ready to print")
+        self.pill.setObjectName("PillOk")
+        self.pill.setToolTip("Click to see the details")
+        self.pill.clicked.connect(lambda: self._show_drawer(True, 1))
+        foot.addWidget(self.pill)
+        foot.addStretch(1)
+        self.hint = QLabel("Drag text to move it · scroll to zoom")
         self.hint.setObjectName("Muted")
-        self.hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        cv.addWidget(self.hint)
+        foot.addWidget(self.hint)
+        cv.addLayout(foot)
         split.addWidget(centre)
 
-        # Right: deck + checks.
-        right = QSplitter(Qt.Orientation.Vertical)
+        # Right: a drawer with the card list and checks, closed until wanted.
+        self.drawer = QWidget()
+        dvl = QVBoxLayout(self.drawer)
+        dvl.setContentsMargins(0, 0, 0, 0)
+        self.check_tabs = QTabWidget()
+        self.check_tabs.setDocumentMode(True)
+        close = QToolButton(text="✕", toolTip="Close")
+        close.clicked.connect(lambda: self._show_drawer(False))
+        self.check_tabs.setCornerWidget(close)
         self.deck_panel = DeckPanel()
         self.deck_panel.rowActivated.connect(self._go_to)
         self.deck_panel.openRequested.connect(self.open_deck)
         self.deck_panel.includedChanged.connect(self._included_changed)
-        right.addWidget(self.deck_panel)
-        checks = QWidget()
-        chv = QVBoxLayout(checks)
-        chv.setContentsMargins(0, 6, 0, 0)
-        self.check_tabs = QTabWidget()
-        self.check_tabs.setDocumentMode(True)
         self.issue_list = QListWidget()
         self.issue_list.setWordWrap(True)
         self.issue_list.itemClicked.connect(self._issue_clicked)
         deck_tab = QWidget()
         dv = QVBoxLayout(deck_tab)
-        dv.setContentsMargins(0, 4, 0, 0)
+        dv.setContentsMargins(0, 6, 0, 0)
+        dv.addWidget(QLabel("Lay out every selected card and list the ones that need a look.",
+                            objectName="Muted", wordWrap=True))
         drow = QHBoxLayout()
         self.check_btn = QPushButton("Check every card")
-        self.check_btn.setToolTip("Lay out every selected card and list the ones with problems")
         self.check_btn.clicked.connect(self._check_deck)
         self.thorough = QCheckBox("Stroke widths too (slower)")
         drow.addWidget(self.check_btn)
@@ -200,14 +226,15 @@ class MainWindow(QMainWindow):
         self.deck_issues.setWordWrap(True)
         self.deck_issues.itemClicked.connect(lambda it: self._go_to(it.data(Qt.ItemDataRole.UserRole)))
         dv.addWidget(self.deck_issues, 1)
+        self.check_tabs.addTab(self.deck_panel, "Cards")
         self.check_tabs.addTab(self.issue_list, "This card")
         self.check_tabs.addTab(deck_tab, "Whole deck")
-        chv.addWidget(self.check_tabs)
-        right.addWidget(checks)
-        right.setStretchFactor(0, 3)
-        right.setStretchFactor(1, 2)
-        right.setMinimumWidth(300)
-        split.addWidget(right)
+        dvl.addWidget(self.check_tabs)
+        self.check_tabs.currentChanged.connect(
+            lambda i: self.deck_btn.setChecked(i == 0) if self.drawer.isVisible() else None)
+        self.drawer.setMinimumWidth(300)
+        self.drawer.hide()
+        split.addWidget(self.drawer)
         split.setStretchFactor(0, 0)
         split.setStretchFactor(1, 1)
         split.setStretchFactor(2, 0)
@@ -222,6 +249,83 @@ class MainWindow(QMainWindow):
         QShortcut(QKeySequence(Qt.Key.Key_PageUp), self, lambda: self._step(-1))
         QShortcut(QKeySequence("Alt+Right"), self, lambda: self._step(1))
         QShortcut(QKeySequence("Alt+Left"), self, lambda: self._step(-1))
+
+    def _build_welcome(self) -> QFrame:
+        w = QFrame()
+        w.setObjectName("Welcome")
+        w.setMaximumWidth(520)
+        v = QVBoxLayout(w)
+        v.setContentsMargins(28, 24, 28, 24)
+        v.setSpacing(12)
+        title = QLabel("Welcome to Cardsmith")
+        title.setObjectName("Big")
+        v.addWidget(title)
+        v.addWidget(QLabel("Turn a spreadsheet into 3D-printable flashcards in three steps.", objectName="Muted"))
+        steps = (
+            ("Open your spreadsheet", "Any CSV, TSV or Anki export. Each column can go on the card."),
+            ("Choose what goes where", "Pick a line of text on the left, or just drag it in the preview."),
+            ("Export for printing", "You get plates ready for Cura, with the colour changes worked out."),
+        )
+        for n, (head, sub) in enumerate(steps, start=1):
+            row = QHBoxLayout()
+            num = QLabel(str(n), objectName="Step")
+            num.setFixedSize(26, 26)
+            num.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            row.addWidget(num, 0, Qt.AlignmentFlag.AlignTop)
+            txt = QLabel(f"<b>{head}</b><br><span style='color:gray'>{sub}</span>")
+            txt.setWordWrap(True)
+            row.addWidget(txt, 1)
+            v.addLayout(row)
+        btns = QHBoxLayout()
+        sample = QPushButton("Look around with the sample deck")
+        sample.clicked.connect(lambda: self._show_welcome(False))
+        mine = QPushButton("Open my spreadsheet…")
+        mine.setObjectName("Primary")
+        mine.clicked.connect(lambda: (self._show_welcome(False), self.open_deck()))
+        btns.addWidget(sample)
+        btns.addStretch(1)
+        btns.addWidget(mine)
+        v.addSpacing(6)
+        v.addLayout(btns)
+        w.setVisible(not self.qs.value("ui/welcomed", False, type=bool))
+        return w
+
+    def _show_welcome(self, on: bool) -> None:
+        self.welcome.setVisible(on)
+        if not on:
+            self.qs.setValue("ui/welcomed", True)
+
+    def _show_drawer(self, on: bool, tab: int | None = None) -> None:
+        if tab is not None:
+            self.check_tabs.setCurrentIndex(tab)
+        if on and not self.drawer.isVisible():
+            sizes = self.splitter.sizes()
+            self.drawer.show()
+            if len(sizes) == 3 and sizes[2] < 200:
+                self.splitter.setSizes([sizes[0], max(400, sizes[1] - 340), 340])
+        elif not on:
+            self.drawer.hide()
+        with QSignalBlocker(self.deck_btn):
+            self.deck_btn.setChecked(on and self.check_tabs.currentIndex() == 0)
+        self.qs.setValue("ui/drawer", on)
+
+    def _update_pill(self, lay: CardLayout) -> None:
+        bad = sum(1 for i in lay.issues if i.level in ("error", "warning"))
+        if bad:
+            self.pill.setText(f"⚠  {bad} thing{'s' if bad != 1 else ''} to check on this card")
+            self.pill.setObjectName("PillWarn")
+        else:
+            self.pill.setText("✓  Ready to print")
+            self.pill.setObjectName("PillOk")
+        self.pill.style().unpolish(self.pill)
+        self.pill.style().polish(self.pill)
+
+    def _update_deck_button(self) -> None:
+        if not self.deck:
+            self.deck_btn.setText("Cards")
+            return
+        n, sel = len(self.deck), sum(self.deck.included)
+        self.deck_btn.setText(f"{n} cards" if sel == n else f"{sel} of {n} cards")
 
     def _build_toolbar(self) -> None:
         tb = self.addToolBar("Main")
@@ -258,8 +362,8 @@ class MainWindow(QMainWindow):
             menu.addAction(label, lambda p=path: self._load_template(p, builtin=True))
         tmpl.setMenu(menu)
         tb.addWidget(tmpl)
-        self.undo_act = act("Undo", self.undo, QKeySequence.StandardKey.Undo)
-        self.redo_act = act("Redo", self.redo, QKeySequence.StandardKey.Redo)
+        self.undo_act = act("↶", self.undo, QKeySequence.StandardKey.Undo, "Undo")
+        self.redo_act = act("↷", self.redo, QKeySequence.StandardKey.Redo, "Redo")
         tb.addAction(self.undo_act)
         tb.addAction(self.redo_act)
         spacer = QWidget()
@@ -280,9 +384,11 @@ class MainWindow(QMainWindow):
         geo = self.qs.value("window/geometry")
         if isinstance(geo, QByteArray):
             self.restoreGeometry(geo)
-        sp = self.qs.value("window/splitter")
+        sp = self.qs.value("window/splitter2")
         if isinstance(sp, QByteArray):
             self.splitter.restoreState(sp)
+        if self.qs.value("ui/drawer", False, type=bool):
+            self._show_drawer(True, 0)
         pr = self.qs.value("printer")
         if pr:
             try:
@@ -333,7 +439,7 @@ class MainWindow(QMainWindow):
     def closeEvent(self, e) -> None:
         self._autosave()
         self.qs.setValue("window/geometry", self.saveGeometry())
-        self.qs.setValue("window/splitter", self.splitter.saveState())
+        self.qs.setValue("window/splitter2", self.splitter.saveState())
         if self._deck_job:
             self._deck_job.cancelled = True
         super().closeEvent(e)
@@ -359,6 +465,7 @@ class MainWindow(QMainWindow):
         self._cache.clear()
         self.deck_panel.set_deck(deck)
         self.deck_issues.clear()
+        self._update_deck_button()
         missing = self._missing_fields()
         if missing and not quiet:
             QMessageBox.information(
@@ -460,6 +567,7 @@ class MainWindow(QMainWindow):
         self._schedule()
 
     def _included_changed(self) -> None:
+        self._update_deck_button()
         self.printer_panel.update_summary(self._n_selected())
         if self.mode == "plate":
             self._schedule()
@@ -622,7 +730,8 @@ class MainWindow(QMainWindow):
             it.setData(Qt.ItemDataRole.UserRole, issue.slot)
             self.issue_list.addItem(it)
         bad = sum(1 for i in lay.issues if i.level in ("error", "warning"))
-        self.check_tabs.setTabText(0, f"This card ({bad})" if bad else "This card")
+        self.check_tabs.setTabText(1, f"This card ({bad})" if bad else "This card")
+        self._update_pill(lay)
 
     def _issue_clicked(self, it: QListWidgetItem) -> None:
         name = it.data(Qt.ItemDataRole.UserRole)
@@ -635,7 +744,7 @@ class MainWindow(QMainWindow):
     # ----------------------------------------------------------- navigation
     def _set_mode(self, i: int) -> None:
         self.mode = "card" if i == 0 else "plate"
-        self.hint.setText("Drag text to move it · scroll to zoom · drag the background to pan"
+        self.hint.setText("Drag text to move it · scroll to zoom"
                           if self.mode == "card" else
                           "Cards are packed to fit the most per plate · numbers match the deck")
         if self.mode == "plate" and self.deck:
@@ -728,8 +837,8 @@ class MainWindow(QMainWindow):
         elif not results:
             self.deck_issues.addItem(QListWidgetItem("✓  Every selected card fits"))
         self.deck_panel.model.set_flags(flags)
-        self.check_tabs.setTabText(1, f"Whole deck ({len(results)})" if results else "Whole deck")
-        self.check_tabs.setCurrentIndex(1)
+        self.check_tabs.setTabText(2, f"Whole deck ({len(results)})" if results else "Whole deck")
+        self._show_drawer(True, 2)
 
 
 def main(argv: list[str] | None = None) -> int:

@@ -25,6 +25,7 @@ from PySide6.QtWidgets import (
 from .. import plate, slicer
 from ..export import ExportOptions, ExportResult, colour_plan_lines, cura_steps
 from ..model import Printer, Template, colour_changes
+from .widgets import Section
 from .workers import export_job
 
 
@@ -87,8 +88,12 @@ class ExportDialog(QDialog):
         self.c_single.setChecked(saved("singles_stl", o.singles_stl))
         self.c_single3 = QCheckBox("Every card as its own 3MF (split by colour)")
         self.c_single3.setChecked(saved("singles_3mf", o.singles_3mf))
-        for c in (self.c_plates, self.c_colour, self.c_stl, self.c_single, self.c_single3):
-            v.addWidget(c)
+        v.addWidget(self.c_plates)
+        v.addWidget(self.c_colour)
+        more = Section("More file types", key="export.more")
+        for c in (self.c_stl, self.c_single, self.c_single3):
+            more.form.addRow(c)
+        v.addWidget(more)
 
         v.addWidget(QLabel("Colour plan", objectName="Section"))
         plan = QLabel("<br>".join(_md_bold(line) for line in colour_plan_lines(t, p)))

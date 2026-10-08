@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from PySide6.QtCore import Qt
@@ -38,6 +39,9 @@ DARK = {
 
 
 def is_dark() -> bool:
+    forced = os.environ.get("CARDSMITH_THEME", "").lower()
+    if forced in ("dark", "light"):
+        return forced == "dark"
     try:
         return QGuiApplication.styleHints().colorScheme() == Qt.ColorScheme.Dark
     except AttributeError:

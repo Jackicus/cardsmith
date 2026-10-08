@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 300" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif">
+  <rect width="760" height="300" rx="16" fill="#F7F4EE"/>
+  <text x="32" y="44" font-size="18" font-weight="700" fill="#1F2A44">One nozzle, three colours: swap filament at two layer heights</text>
+  <g transform="translate(40 20)">
+    <rect x="0" y="150" width="420" height="72" fill="#F4EFE6" stroke="#B9B2A4"/>
+    <rect x="12" y="102" width="22" height="48" fill="#C0392B"/>
+    <rect x="386" y="102" width="22" height="48" fill="#C0392B"/>
+    <rect x="120" y="102" width="40" height="48" fill="#C0392B"/>
+    <rect x="120" y="78" width="40" height="24" fill="#1F2A44"/>
+    <rect x="190" y="102" width="70" height="48" fill="#C0392B"/>
+    <rect x="190" y="78" width="70" height="24" fill="#1F2A44"/>
+    <rect x="290" y="102" width="30" height="48" fill="#C0392B"/>
+    <rect x="290" y="78" width="30" height="24" fill="#1F2A44"/>
+    <line x1="-10" y1="150" x2="470" y2="150" stroke="#E0533D" stroke-width="2" stroke-dasharray="6 5"/>
+    <line x1="-10" y1="102" x2="470" y2="102" stroke="#E0533D" stroke-width="2" stroke-dasharray="6 5"/>
+    <text x="210" y="192" font-size="14" fill="#6B6F7B" text-anchor="middle">card · layers 1–6 · 0–1.2 mm</text>
+    <text x="23" y="92" font-size="13" fill="#C0392B" text-anchor="middle">border</text>
+    <text x="225" y="68" font-size="13" fill="#1F2A44" text-anchor="middle">text</text>
+  </g>
+  <g font-size="14">
+    <text x="530" y="118" font-weight="700" fill="#E0533D">swap at layer 9</text>
+    <text x="530" y="136" fill="#6B6F7B">z = 1.6 mm → ink</text>
+    <text x="530" y="166" font-weight="700" fill="#E0533D">swap at layer 7</text>
+    <text x="530" y="184" fill="#6B6F7B">z = 1.2 mm → red</text>
+    <text x="530" y="222" fill="#6B6F7B">Seen from above:</text>
+    <rect x="530" y="232" width="16" height="16" fill="#F4EFE6" stroke="#B9B2A4"/><text x="552" y="245" font-size="13" fill="#1F2A44">card</text>
+    <rect x="600" y="232" width="16" height="16" fill="#C0392B"/><text x="622" y="245" font-size="13" fill="#1F2A44">border</text>
+    <rect x="682" y="232" width="16" height="16" fill="#1F2A44"/><text x="704" y="245" font-size="13" fill="#1F2A44">text</text>
+  </g>
+  <text x="32" y="282" font-size="12" fill="#6B6F7B">Side view, not to scale. Heights snap to whole layers; parts at the same height share a colour.</text>
+</svg>

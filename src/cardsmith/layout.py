@@ -232,11 +232,32 @@ def _lay_ruby(slot: Slot, t: Template, content: str, primary, fallbacks, y_centr
         sp = slot.letter_spacing
         items = []
         x = 0.0
-        for base, reading in segs:
+        for k, (base, reading) in enumerate(segs):
             br = fonts.shape(base, primary, fallbacks, size, sp)
             rr = fonts.shape(reading, primary, fallbacks, rs, 0) if reading else None
-            w = max(br.width, rr.width if rr else 0)
-            items.append((x, w, br, rr))
+            base_dx, ruby_dx, w = 0.0, 0.0, br.width
+            if rr is not None:
+                need = rr.width - br.width
+                if need > 0:
+                    # A long reading may hang over neighbouring kana (up to one
+                    # ruby character each side), as in Japanese typesetting.
+                    allow_l = rs if k > 0 and segs[k - 1][1] is None else 0.0
+                    allow_r = rs if k < len(segs) - 1 and segs[k + 1][1] is None else 0.0
+                    ol = min(allow_l, need / 2)
+                    orr = min(allow_r, need / 2)
+                    rest = need - ol - orr
+                    extra_l = min(allow_l - ol, rest)
+                    ol += extra_l
+                    rest -= extra_l
+                    extra_r = min(allow_r - orr, rest)
+                    orr += extra_r
+                    rest -= extra_r
+                    w = br.width + rest
+                    base_dx = rest / 2
+                    ruby_dx = base_dx - ol - rest / 2
+                else:
+                    ruby_dx = -need / 2
+            items.append((x, w, br, rr, base_dx, ruby_dx))
             x += w + sp
         return items, max(0.0, x - sp)
 
@@ -252,16 +273,16 @@ def _lay_ruby(slot: Slot, t: Template, content: str, primary, fallbacks, y_centr
     parts = []
     missing: set[str] = set()
     ruby_cy = y_centre + size / 2 + slot.ruby_gap + size * slot.ruby_scale / 2
-    for x, w, br, rr in items:
+    for x, _w, br, rr, base_dx, ruby_dx in items:
         missing.update(br.missing)
         g = br.geometry()
         if not g.is_empty:
-            parts.append(affinity.translate(g, x0 + x + (w - br.width) / 2, y_centre - br.mid))
+            parts.append(affinity.translate(g, x0 + x + base_dx, y_centre - br.mid))
         if rr:
             missing.update(rr.missing)
             g = rr.geometry()
             if not g.is_empty:
-                parts.append(affinity.translate(g, x0 + x + (w - rr.width) / 2, ruby_cy - rr.mid))
+                parts.append(affinity.translate(g, x0 + x + ruby_dx, ruby_cy - rr.mid))
     if missing:
         issues.append(Issue("error", f"no installed font has: {''.join(sorted(missing))}", slot.name))
     return _Laid(unary_union(parts) if parts else Polygon(), size, 1, issues)

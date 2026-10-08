@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor, QGuiApplication, QPalette
 from PySide6.QtWidgets import QApplication
 
 ACCENT = "#E0533D"  # vermilion, like a hanko stamp
+HERE = Path(__file__).parent
 
 LIGHT = {
     "window": "#F3F1EC",
@@ -72,7 +75,20 @@ def apply(app: QApplication) -> None:
 
 
 def stylesheet(c: dict[str, str]) -> str:
+    up = (HERE / "arrow-up.svg").as_posix()
+    down = (HERE / "arrow-down.svg").as_posix()
     return f"""
+    QAbstractSpinBox {{ padding-right: 20px; }}
+    QAbstractSpinBox::up-button, QAbstractSpinBox::down-button {{
+        subcontrol-origin: border; width: 20px; border: none; border-left: 1px solid {c['border']};
+        background: transparent; }}
+    QAbstractSpinBox::up-button {{ subcontrol-position: top right; border-top-right-radius: 6px; }}
+    QAbstractSpinBox::down-button {{ subcontrol-position: bottom right; border-bottom-right-radius: 6px; }}
+    QAbstractSpinBox::up-button:hover, QAbstractSpinBox::down-button:hover {{ background: {c['alt']}; }}
+    QAbstractSpinBox::up-arrow {{ image: url({up}); width: 10px; height: 10px; }}
+    QAbstractSpinBox::down-arrow {{ image: url({down}); width: 10px; height: 10px; }}
+    QComboBox::drop-down {{ border: none; width: 22px; }}
+    QComboBox::down-arrow {{ image: url({down}); width: 10px; height: 10px; }}
     QMainWindow, QDialog {{ background: {c['window']}; }}
     QToolTip {{ background: {c['panel']}; color: {c['text']}; border: 1px solid {c['border']};
                 padding: 6px; border-radius: 6px; }}

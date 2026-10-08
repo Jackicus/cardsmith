@@ -57,6 +57,8 @@ def _spin(lo, hi, step=0.1, suffix=" mm", decimals=1, tip="") -> QDoubleSpinBox:
     s.setKeyboardTracking(False)
     s.setToolTip(tip)
     s.setAlignment(Qt.AlignmentFlag.AlignRight)
+    s.setMinimumWidth(64)
+    s.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
     return s
 
 
@@ -365,6 +367,7 @@ class SlotsPanel(Panel):
         f.addRow("Smallest size", b.num(_spin(1, 100, 0.5), s, "min_size"))
         ml = QSpinBox()
         ml.setRange(1, 20)
+        ml.setMinimumWidth(64)
         ml.setAlignment(Qt.AlignmentFlag.AlignRight)
         f.addRow("Max lines", b.num(ml, s, "max_lines"))
         f.addRow("Line spacing", b.num(_spin(0.6, 3, 0.05, "×", 2), s, "line_spacing"))
@@ -602,6 +605,10 @@ class SlotsPanel(Panel):
 # ---------------------------------------------------------------------------
 
 
+def _layers(a: int, b: int) -> str:
+    return f"layer {a}" if a == b else f"layers {a}–{b}"
+
+
 def swatch(colour: str, size: int = 18) -> QIcon:
     pm = QPixmap(size, size)
     pm.fill(QColor(colour))
@@ -649,14 +656,14 @@ class ColoursPanel(Panel):
             h.setContentsMargins(8, 6, 8, 6)
             btn = QPushButton()
             btn.setFixedSize(38, 30)
-            btn.setStyleSheet(f"background:{band.colour}; border:1px solid #0003; border-radius:6px;")
+            btn.setStyleSheet(f"background:{band.colour}; border:1px solid rgba(0,0,0,60); border-radius:6px;")
             btn.setToolTip("Pick a colour")
             btn.clicked.connect(lambda _=False, i=band.index: self._pick(i))
             h.addWidget(btn)
             what = ", ".join(band.features)
             lab = QLabel(f"<b>{colour_name(band.colour)}</b> · {what}<br>"
-                         f"<span style='color:gray'>{band.z_bottom:g} – {band.z_top:g} mm, layers "
-                         f"{p.layers_below(band.z_bottom) + 1}–{p.layers_below(band.z_top)}</span>")
+                         f"<span style='color:gray'>{band.z_bottom:g} – {band.z_top:g} mm, "
+                         f"{_layers(p.layers_below(band.z_bottom) + 1, p.layers_below(band.z_top))}</span>")
             lab.setWordWrap(True)
             h.addWidget(lab, 1)
             self.bands_box.addWidget(row)
@@ -743,6 +750,7 @@ class PrinterPanel(QWidget):
         f.addRow("", b.check(QCheckBox("Turn cards to fit more"), p, "allow_rotation"))
         mx = QSpinBox()
         mx.setRange(0, 999)
+        mx.setMinimumWidth(64)
         mx.setSpecialValueText("as many as fit")
         mx.setAlignment(Qt.AlignmentFlag.AlignRight)
         f.addRow("Max per plate", b.num(mx, p, "max_per_plate"))
@@ -753,8 +761,9 @@ class PrinterPanel(QWidget):
         f.addRow("Nozzle", b.num(_spin(0.1, 2, 0.05, " mm", 2), p, "nozzle"))
         f.addRow("Layer height", b.num(_spin(0.04, 1, 0.02, " mm", 2), p, "layer_height"))
         f.addRow("First layer", b.num(_spin(0.04, 1, 0.02, " mm", 2), p, "first_layer_height"))
-        f.addRow("Min. feature", b.num(_spin(0, 2, 0.05, " mm", 2, "Strokes or gaps thinner than this are "
-                                                                     "flagged. 0 = nozzle size."), p, "min_feature"))
+        mf = _spin(0, 2, 0.05, " mm", 2, "Strokes or gaps thinner than this are flagged.")
+        mf.setSpecialValueText("same as nozzle")
+        f.addRow("Min. feature", b.num(mf, p, "min_feature"))
         v.addWidget(g)
         v.addWidget(QLabel("Plate fit", objectName="Section"))
         self.summary = QLabel()

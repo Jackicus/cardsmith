@@ -79,14 +79,14 @@ class MainWindow(QMainWindow):
         if ICON.exists():
             self.setWindowIcon(QIcon(str(ICON)))
         self.resize(1440, 900)
-        self._build_ui()
-        self._build_toolbar()
-        self._restore_session(deck_path)
-
         self._render_timer = QTimer(self, singleShot=True, interval=20, timeout=self._render)
         self._check_timer = QTimer(self, singleShot=True, interval=220, timeout=self._check_current)
         self._history_timer = QTimer(self, singleShot=True, interval=500, timeout=self._push_history)
         self._save_timer = QTimer(self, singleShot=True, interval=1500, timeout=self._autosave)
+        self._build_ui()
+        self._build_toolbar()
+        self._restore_session(deck_path)
+
         self._refresh_all()
         self._push_history()
         self._render()

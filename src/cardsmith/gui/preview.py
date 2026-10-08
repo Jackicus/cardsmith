@@ -142,7 +142,7 @@ class BedItem(QGraphicsItem):
         self.w, self.d, self.margin, self.label = w, d, margin, label
 
     def boundingRect(self) -> QRectF:
-        return QRectF(-6, -14, self.w + 12, self.d + 20)
+        return QRectF(-6, -10, self.w + 12, self.d + 16)
 
     def paint(self, p: QPainter, option, widget=None) -> None:
         c = theme.colours()
@@ -172,10 +172,10 @@ class BedItem(QGraphicsItem):
         m = self.margin
         p.drawRoundedRect(QRectF(m, m, self.w - 2 * m, self.d - 2 * m), 3, 3)
         f = QFont()
-        f.setPointSizeF(5)
+        f.setPointSizeF(3.6)
         p.setFont(f)
         p.setPen(QColor(c["muted"]))
-        p.drawText(QRectF(0, -11, self.w, 9), Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, self.label)
+        p.drawText(QRectF(0, -8, self.w, 7), Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, self.label)
 
 
 class Preview(QGraphicsView):
@@ -231,7 +231,7 @@ class Preview(QGraphicsView):
                 item.setTransform(tr)
             else:
                 item.setPos(slot.x, packing.bed_d - slot.y - lay.height)
-        self._set_rect(QRectF(-8, -16, packing.bed_w + 16, packing.bed_d + 26))
+        self._set_rect(QRectF(-8, -12, packing.bed_w + 16, packing.bed_d + 22))
 
     def clear_message(self, text: str) -> None:
         self.scene().clear()

@@ -38,9 +38,13 @@ def load_printers() -> list[Printer]:
     if f.exists():
         try:
             data = tomllib.loads(f.read_text(encoding="utf-8"))
-            saved = [Printer.from_dict(d) for d in data.get("printer", [])]
         except (OSError, tomllib.TOMLDecodeError):
-            saved = []
+            data = {}
+        for d in data.get("printer", []):
+            try:
+                saved.append(Printer.from_dict(d))
+            except (TypeError, ValueError):
+                continue  # a hand-edited profile with bad values: skip it rather than fail to start
     names = {p.name for p in saved}
     return saved + [p for p in PRINTER_PRESETS if p.name not in names]
 

@@ -16,16 +16,6 @@ from typing import Any
 
 import tomli_w
 
-HOLE_POSITIONS = (
-    "top-left",
-    "top-center",
-    "top-right",
-    "center-left",
-    "center-right",
-    "bottom-left",
-    "bottom-center",
-    "bottom-right",
-)
 ALIGNMENTS = ("center", "left", "right")
 FIT_MODES = ("shrink", "wrap", "none")
 
@@ -67,17 +57,6 @@ class Border:
     # Distance between the card edge and the outside of the border.
     inset: float = 0.0
     height: float = 0.4
-    # Also draw a ring of border around the hanging hole.
-    around_hole: bool = True
-
-
-@dataclass
-class Hole:
-    enabled: bool = False
-    diameter: float = 5.0
-    position: str = "top-left"
-    # Distance from the card edge(s) to the centre of the hole.
-    offset: float = 5.5
 
 
 @dataclass
@@ -114,7 +93,6 @@ class Template:
     name: str = "Untitled"
     card: Card = field(default_factory=Card)
     border: Border = field(default_factory=Border)
-    hole: Hole = field(default_factory=Hole)
     slots: list[Slot] = field(default_factory=list)
     # Colours of the height bands, from the card base upwards.
     palette: list[str] = field(default_factory=lambda: list(DEFAULT_PALETTE))
@@ -137,7 +115,6 @@ class Template:
             name=d.get("name", "Untitled"),
             card=_from_dict(Card, d.get("card")),
             border=_from_dict(Border, d.get("border")),
-            hole=_from_dict(Hole, d.get("hole")),
             slots=[_from_dict(Slot, s) for s in d.get("slots", d.get("slot", []))],
         )
         if "palette" in d:
@@ -168,6 +145,14 @@ class Printer:
     min_feature: float = 0.0
     allow_rotation: bool = True
     max_per_plate: int = 0  # 0 = as many as fit
+
+    def __post_init__(self) -> None:
+        for attr in ("layer_height", "first_layer_height", "nozzle", "bed_width", "bed_depth"):
+            if not getattr(self, attr) > 0:
+                raise ValueError(f"printer {attr.replace('_', ' ')} must be more than 0")
+        for attr in ("margin", "gap", "min_feature", "max_per_plate"):
+            if getattr(self, attr) < 0:
+                raise ValueError(f"printer {attr.replace('_', ' ')} can't be negative")
 
     @property
     def feature_limit(self) -> float:

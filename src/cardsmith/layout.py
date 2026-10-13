@@ -11,7 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from shapely import affinity
-from shapely.geometry import Point, Polygon, box
+from shapely.geometry import Polygon, box
 from shapely.geometry.base import BaseGeometry
 from shapely.ops import unary_union
 
@@ -57,7 +57,6 @@ class CardLayout:
     height: float
     base_z: float
     outline: BaseGeometry
-    hole: BaseGeometry
     features: list[Feature] = field(default_factory=list)
     issues: list[Issue] = field(default_factory=list)
     boxes: list[SlotBox] = field(default_factory=list)
@@ -88,30 +87,13 @@ def card_outline(w: float, h: float, r: float) -> BaseGeometry:
     return box(r, r, w - r, h - r).buffer(r, quad_segs=24)
 
 
-def hole_centre(t: Template) -> tuple[float, float]:
-    c, hole = t.card, t.hole
-    v, _, hz = hole.position.partition("-")
-    x = {"left": hole.offset, "center": c.width / 2, "right": c.width - hole.offset}.get(hz, hole.offset)
-    y = {"top": c.height - hole.offset, "center": c.height / 2, "bottom": hole.offset}.get(v, c.height / 2)
-    return x, y
-
-
-def hole_shape(t: Template) -> BaseGeometry:
-    if not t.hole.enabled or t.hole.diameter <= 0:
-        return Polygon()
-    x, y = hole_centre(t)
-    return Point(x, y).buffer(t.hole.diameter / 2, quad_segs=24)
-
-
-def border_shape(t: Template, outline: BaseGeometry, hole: BaseGeometry) -> BaseGeometry:
+def border_shape(t: Template, outline: BaseGeometry) -> BaseGeometry:
     b = t.border
     if not b.enabled or b.width <= 0:
         return Polygon()
     outer = outline.buffer(-b.inset, quad_segs=24) if b.inset > 0 else outline
     ring = outer.difference(outer.buffer(-b.width, quad_segs=24))
-    if not hole.is_empty and b.around_hole:
-        ring = ring.union(hole.buffer(b.width, quad_segs=24))
-    return ring.intersection(outline).difference(hole)
+    return ring.intersection(outline)
 
 
 # ---------------------------------------------------------------------------
@@ -333,21 +315,19 @@ def layout_card(t: Template, printer: Printer, row: dict[str, str], index: int =
     c = t.card
     base_z = printer.snap_base(c.thickness)
     outline = card_outline(c.width, c.height, c.corner_radius)
-    hole = hole_shape(t)
-    lay = CardLayout(c.width, c.height, base_z, outline, hole)
+    lay = CardLayout(c.width, c.height, base_z, outline)
 
     bands = height_bands(t, printer)
     band_of = {round(b.z_top, 4): b.index for b in bands}
 
-    lay.features.append(Feature("Card", "base", outline.difference(hole), 0.0, base_z, 0))
+    lay.features.append(Feature("Card", "base", outline, 0.0, base_z, 0))
 
-    border = border_shape(t, outline, hole)
+    border = border_shape(t, outline)
     if not border.is_empty:
         z1 = round(base_z + printer.snap_relief(t.border.height), 4)
         lay.features.append(Feature("Border", "border", border, base_z, z1, band_of.get(z1, 1)))
 
     safe = box(c.padding, c.padding, c.width - c.padding, c.height - c.padding)
-    solid = outline.difference(hole)
     placed: list[tuple[str, BaseGeometry]] = []
     limit = printer.feature_limit
     thin_parts, gap_parts = [], []
@@ -379,8 +359,6 @@ def layout_card(t: Template, printer: Printer, row: dict[str, str], index: int =
             lay.issues.append(Issue("error", "runs off the edge of the card", slot.name))
         elif not g.within(safe):
             lay.issues.append(Issue("warning", "extends into the padding", slot.name))
-        if not hole.is_empty and g.intersects(hole):
-            lay.issues.append(Issue("warning", "is cut by the hole", slot.name))
         if not border.is_empty and g.intersects(border):
             lay.issues.append(Issue("warning", "touches the border", slot.name))
         for other, og in placed:
@@ -388,7 +366,7 @@ def layout_card(t: Template, printer: Printer, row: dict[str, str], index: int =
                 lay.issues.append(Issue("warning", f"overlaps {other}", slot.name))
         placed.append((slot.name, g))
 
-        g = g.intersection(solid)
+        g = g.intersection(outline)
         z1 = round(base_z + printer.snap_relief(slot.height), 4)
         lay.features.append(Feature(slot.name, "slot", g, base_z, z1, band_of.get(z1, 1), i))
 

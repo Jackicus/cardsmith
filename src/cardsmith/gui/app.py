@@ -6,11 +6,10 @@ import json
 import sys
 from pathlib import Path
 
-from PySide6.QtCore import QByteArray, QSettings, QSignalBlocker, QSize, Qt, QTimer
+from PySide6.QtCore import QByteArray, QSettings, QSignalBlocker, Qt, QTimer
 from PySide6.QtGui import QAction, QIcon, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QApplication,
-    QButtonGroup,
     QCheckBox,
     QFileDialog,
     QFrame,
@@ -25,6 +24,7 @@ from PySide6.QtWidgets import (
     QProgressBar,
     QPushButton,
     QSplitter,
+    QStackedWidget,
     QTabWidget,
     QToolButton,
     QVBoxLayout,
@@ -41,11 +41,25 @@ from .export_dialog import ExportDialog
 from .help import HelpDialog
 from .panels import CardPanel, ColoursPanel, PrinterPanel, SlotsPanel
 from .preview import Preview
+from .widgets import Segmented, divider, floating
 from .workers import check_job, deck_check_job
 
 HERE = Path(__file__).parent
 ICON = HERE / "icon.svg"
 LEVEL_ICON = {"error": "⛔", "warning": "⚠", "info": "ℹ"}
+
+
+def _inset(w: QWidget, left: int = 0, top: int = 0, right: int = 0, bottom: int = 0) -> QWidget:
+    """Wrap ``w`` with transparent margins, for placing floating bars over the canvas."""
+    holder = QWidget()
+    h = QHBoxLayout(holder)
+    h.setContentsMargins(left, top, right, bottom)
+    h.addWidget(w)
+    return holder
+
+
+def _elide(text: str, n: int) -> str:
+    return text if len(text) <= n else text[: n - 1] + "…"
 
 
 def _sample_deck() -> Path | None:
@@ -86,7 +100,6 @@ class MainWindow(QMainWindow):
         self._history_timer = QTimer(self, singleShot=True, interval=500, timeout=self._push_history)
         self._save_timer = QTimer(self, singleShot=True, interval=1500, timeout=self._autosave)
         self._build_ui()
-        self._build_toolbar()
         self._restore_session(deck_path)
 
         self._refresh_all()
@@ -95,73 +108,50 @@ class MainWindow(QMainWindow):
 
     # ------------------------------------------------------------------ UI
     def _build_ui(self) -> None:
+        root = QWidget()
+        rv = QVBoxLayout(root)
+        rv.setContentsMargins(0, 0, 0, 0)
+        rv.setSpacing(0)
+        rv.addWidget(self._build_header())
         split = QSplitter(Qt.Orientation.Horizontal)
-        split.setHandleWidth(8)
-        self.setCentralWidget(split)
+        split.setHandleWidth(1)
+        split.setChildrenCollapsible(False)
+        rv.addWidget(split, 1)
+        self.setCentralWidget(root)
 
-        # Left: editing tabs.
-        self.tabs = QTabWidget()
-        self.tabs.setDocumentMode(True)
+        # Left: the deck, then one editing page at a time.
+        side = QFrame(objectName="Sidebar")
+        sv = QVBoxLayout(side)
+        sv.setContentsMargins(0, 16, 0, 0)
+        sv.setSpacing(12)
+        sv.addWidget(self._build_deck_card())
+        self.page_tabs = Segmented(
+            ["Text", "Card", "Colours", "Printer"],
+            ["What's written on the card, and where", "Size, corners and the raised border",
+             "Filament colour for each height", "Your printer's bed and layer settings"])
+        self.page_tabs.changed.connect(self._show_page)
+        tabs_row = QHBoxLayout()
+        tabs_row.setContentsMargins(16, 0, 16, 0)
+        tabs_row.addWidget(self.page_tabs)
+        sv.addLayout(tabs_row)
+        self.pages = QStackedWidget()
         get_t = lambda: self.template  # noqa: E731
         get_p = lambda: self.printer  # noqa: E731
         self.card_panel = CardPanel(get_t)
         self.slots_panel = SlotsPanel(get_t, lambda: self.deck.columns if self.deck else [])
         self.colours_panel = ColoursPanel(get_t, get_p)
         self.printer_panel = PrinterPanel(get_p, self._set_printer, get_t)
-        self.tabs.addTab(self.slots_panel, "Text")
-        self.tabs.addTab(self.card_panel, "Card")
-        self.tabs.addTab(self.colours_panel, "Colours")
-        self.tabs.addTab(self.printer_panel, "Printer")
+        for pnl in (self.slots_panel, self.card_panel, self.colours_panel, self.printer_panel):
+            self.pages.addWidget(pnl)
         for pnl in (self.card_panel, self.slots_panel, self.colours_panel):
             pnl.changed.connect(self._template_changed)
         self.printer_panel.changed.connect(self._printer_changed)
         self.slots_panel.selectedChanged.connect(self._slot_selected)
-        self.tabs.setMinimumWidth(340)
-        split.addWidget(self.tabs)
+        sv.addWidget(self.pages, 1)
+        side.setMinimumWidth(360)
+        split.addWidget(side)
 
-        # Centre: preview.
-        centre = QWidget()
-        cv = QVBoxLayout(centre)
-        cv.setContentsMargins(0, 0, 0, 0)
-        bar = QHBoxLayout()
-        self.mode_group = QButtonGroup(self)
-        for i, label in enumerate(("Card", "Plate")):
-            b = QPushButton(label)
-            b.setCheckable(True)
-            b.setChecked(i == 0)
-            b.setToolTip("Preview one card" if i == 0 else "See how the cards fit on your print bed")
-            self.mode_group.addButton(b, i)
-            bar.addWidget(b)
-        self.mode_group.idClicked.connect(self._set_mode)
-        bar.addSpacing(12)
-        self.prev_btn = QToolButton(text="◀", toolTip="Previous (Page Up)", clicked=lambda: self._step(-1))
-        self.next_btn = QToolButton(text="▶", toolTip="Next (Page Down)", clicked=lambda: self._step(1))
-        self.nav_label = QLabel()
-        self.nav_label.setObjectName("Title")
-        bar.addWidget(self.prev_btn)
-        bar.addWidget(self.next_btn)
-        bar.addWidget(self.nav_label, 1)
-        self.deck_btn = QPushButton("Cards")
-        self.deck_btn.setCheckable(True)
-        self.deck_btn.setToolTip("Show the list of cards – pick which ones to print")
-        self.deck_btn.toggled.connect(lambda on: self._show_drawer(on, 0))
-        bar.addWidget(self.deck_btn)
-        view = QToolButton(text="View ▾")
-        view.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
-        vm = QMenu(self)
-        self.show_issues = QAction("Highlight print problems", self, checkable=True, checked=True)
-        self.show_issues.setToolTip("Red: strokes thinner than the nozzle. Orange: gaps that may fill in.")
-        self.show_guides = QAction("Show safe area", self, checkable=True, checked=True)
-        for a in (self.show_issues, self.show_guides):
-            a.toggled.connect(lambda _: self._render())
-            vm.addAction(a)
-        vm.addSeparator()
-        vm.addAction("Fit to window", lambda: self.preview.fit())
-        vm.addAction("Show the welcome again", lambda: self._show_welcome(True))
-        view.setMenu(vm)
-        bar.addWidget(view)
-        cv.addLayout(bar)
-
+        # Centre: the canvas, with floating bars on top.
         stage = QWidget()
         grid = QGridLayout(stage)
         grid.setContentsMargins(0, 0, 0, 0)
@@ -170,30 +160,79 @@ class MainWindow(QMainWindow):
         self.preview.slotDragged.connect(self._preview_drag)
         self.preview.dragFinished.connect(self._drag_done)
         grid.addWidget(self.preview, 0, 0)
-        self.welcome = self._build_welcome()
-        grid.addWidget(self.welcome, 0, 0, Qt.AlignmentFlag.AlignCenter)
-        cv.addWidget(stage, 1)
 
-        foot = QHBoxLayout()
+        bar = floating(QFrame())
+        bh = QHBoxLayout(bar)
+        bh.setContentsMargins(6, 5, 6, 5)
+        bh.setSpacing(4)
+        self.mode_tabs = Segmented(["Card", "Plate"], ["Preview one card",
+                                                       "See how the cards fit on your print bed"], expand=False)
+        self.mode_tabs.changed.connect(self._set_mode)
+        bh.addWidget(self.mode_tabs)
+        bh.addWidget(divider())
+        self.prev_btn = QToolButton(text="‹", toolTip="Previous  (Page Up)", clicked=lambda: self._step(-1))
+        self.next_btn = QToolButton(text="›", toolTip="Next  (Page Down)", clicked=lambda: self._step(1))
+        for b in (self.prev_btn, self.next_btn):
+            b.setStyleSheet("font-size: 17px; padding: 1px 10px 3px 10px;")
+        self.nav_label = QLabel()
+        self.nav_label.setMinimumWidth(150)
+        self.nav_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        bh.addWidget(self.prev_btn)
+        bh.addWidget(self.nav_label)
+        bh.addWidget(self.next_btn)
+        bh.addWidget(divider())
+        fit = QToolButton(text="⤢", toolTip="Fit to window  (or double-click the canvas)",
+                          clicked=lambda: self.preview.fit())
+        bh.addWidget(fit)
+        view = QToolButton(text="⋯", toolTip="View options")
+        view.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        vm = QMenu(self)
+        self.show_issues = QAction("Highlight print problems", self, checkable=True, checked=True)
+        self.show_issues.setToolTip("Red: strokes thinner than the nozzle. Orange: gaps that may fill in.")
+        self.show_guides = QAction("Show safe area", self, checkable=True, checked=True)
+        self.show_guides.setToolTip("The dashed line: text inside it stays clear of the edge.")
+        for a in (self.show_issues, self.show_guides):
+            a.toggled.connect(lambda _: self._render())
+            vm.addAction(a)
+        vm.setToolTipsVisible(True)
+        vm.addSeparator()
+        vm.addAction("Show the welcome again", lambda: self._show_welcome(True))
+        view.setMenu(vm)
+        bh.addWidget(view)
+        grid.addWidget(_inset(bar, top=16), 0, 0, Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignHCenter)
+
         self.pill = QPushButton("✓  Ready to print")
         self.pill.setObjectName("PillOk")
-        self.pill.setToolTip("Click to see the details")
+        self.pill.setToolTip("Print checks for this card. Click for details.")
+        self.pill.setCursor(Qt.CursorShape.PointingHandCursor)
         self.pill.clicked.connect(lambda: self._show_drawer(True, 1))
-        foot.addWidget(self.pill)
-        foot.addStretch(1)
-        self.hint = QLabel("Drag text to move it · scroll to zoom")
-        self.hint.setObjectName("Muted")
-        foot.addWidget(self.hint)
-        cv.addLayout(foot)
-        split.addWidget(centre)
+        grid.addWidget(_inset(self.pill, left=16, bottom=16), 0, 0,
+                       Qt.AlignmentFlag.AlignBottom | Qt.AlignmentFlag.AlignLeft)
+
+        self.info = QLabel()
+        self.info.setObjectName("Muted")
+        grid.addWidget(_inset(self.info, right=20, bottom=22), 0, 0,
+                       Qt.AlignmentFlag.AlignBottom | Qt.AlignmentFlag.AlignRight)
+
+        self.toast = floating(QLabel())
+        self.toast.setContentsMargins(14, 8, 14, 8)
+        self.toast.hide()
+        self._toast_timer = QTimer(self, singleShot=True, timeout=self.toast.hide)
+        grid.addWidget(_inset(self.toast, top=72), 0, 0, Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignHCenter)
+
+        self.welcome = self._build_welcome()
+        grid.addWidget(self.welcome, 0, 0, Qt.AlignmentFlag.AlignCenter)
+        split.addWidget(stage)
 
         # Right: a drawer with the card list and checks, closed until wanted.
-        self.drawer = QWidget()
+        self.drawer = QFrame(objectName="Drawer")
         dvl = QVBoxLayout(self.drawer)
-        dvl.setContentsMargins(0, 0, 0, 0)
+        dvl.setContentsMargins(14, 10, 14, 14)
         self.check_tabs = QTabWidget()
         self.check_tabs.setDocumentMode(True)
-        close = QToolButton(text="✕", toolTip="Close")
+        self.check_tabs.tabBar().setDrawBase(False)
+        close = QToolButton(text="✕", toolTip="Close  (Esc)")
+        close.setObjectName("Ghost")
         close.clicked.connect(lambda: self._show_drawer(False))
         self.check_tabs.setCornerWidget(close)
         self.deck_panel = DeckPanel()
@@ -202,16 +241,19 @@ class MainWindow(QMainWindow):
         self.deck_panel.includedChanged.connect(self._included_changed)
         self.issue_list = QListWidget()
         self.issue_list.setWordWrap(True)
+        self.issue_list.setToolTip("Click a problem to jump to that line of text")
         self.issue_list.itemClicked.connect(self._issue_clicked)
         deck_tab = QWidget()
         dv = QVBoxLayout(deck_tab)
-        dv.setContentsMargins(0, 6, 0, 0)
+        dv.setContentsMargins(0, 8, 0, 0)
         dv.addWidget(QLabel("Lay out every selected card and list the ones that need a look.",
                             objectName="Muted", wordWrap=True))
         drow = QHBoxLayout()
         self.check_btn = QPushButton("Check every card")
+        self.check_btn.setToolTip("Find cards whose text overflows, overlaps or runs off the edge")
         self.check_btn.clicked.connect(self._check_deck)
         self.thorough = QCheckBox("Stroke widths too (slower)")
+        self.thorough.setToolTip("Also look for strokes and gaps too fine for your nozzle")
         drow.addWidget(self.check_btn)
         drow.addWidget(self.thorough)
         drow.addStretch(1)
@@ -224,15 +266,19 @@ class MainWindow(QMainWindow):
         dv.addWidget(self.deck_progress)
         self.deck_issues = QListWidget()
         self.deck_issues.setWordWrap(True)
+        self.deck_issues.setToolTip("Click a card to open it")
         self.deck_issues.itemClicked.connect(lambda it: self._go_to(it.data(Qt.ItemDataRole.UserRole)))
         dv.addWidget(self.deck_issues, 1)
         self.check_tabs.addTab(self.deck_panel, "Cards")
         self.check_tabs.addTab(self.issue_list, "This card")
         self.check_tabs.addTab(deck_tab, "Whole deck")
+        self.check_tabs.setTabToolTip(0, "Every card in the deck. Untick the ones you don't want to print.")
+        self.check_tabs.setTabToolTip(1, "Print checks for the card on screen")
+        self.check_tabs.setTabToolTip(2, "Check every selected card at once")
         dvl.addWidget(self.check_tabs)
         self.check_tabs.currentChanged.connect(
             lambda i: self.deck_btn.setChecked(i == 0) if self.drawer.isVisible() else None)
-        self.drawer.setMinimumWidth(300)
+        self.drawer.setMinimumWidth(320)
         self.drawer.hide()
         split.addWidget(self.drawer)
         split.setStretchFactor(0, 0)
@@ -241,43 +287,143 @@ class MainWindow(QMainWindow):
         split.setSizes([380, 760, 380])
         self.splitter = split
 
-        self.status = self.statusBar()
-        self.status_plate = QLabel()
-        self.status.addPermanentWidget(self.status_plate)
-
         QShortcut(QKeySequence(Qt.Key.Key_PageDown), self, lambda: self._step(1))
         QShortcut(QKeySequence(Qt.Key.Key_PageUp), self, lambda: self._step(-1))
         QShortcut(QKeySequence("Alt+Right"), self, lambda: self._step(1))
         QShortcut(QKeySequence("Alt+Left"), self, lambda: self._step(-1))
+        QShortcut(QKeySequence(Qt.Key.Key_Escape), self, self._escape)
+
+    def _build_header(self) -> QFrame:
+        head = QFrame(objectName="Header")
+        h = QHBoxLayout(head)
+        h.setContentsMargins(16, 10, 16, 10)
+        h.setSpacing(6)
+        mark = QLabel("札", objectName="BrandMark")
+        mark.setFixedSize(32, 32)
+        mark.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        h.addWidget(mark)
+        h.addSpacing(4)
+        h.addWidget(QLabel("Cardsmith", objectName="Brand"))
+        h.addSpacing(18)
+
+        def act(text, slot, key=None, tip=None):
+            a = QAction(text, self)
+            a.triggered.connect(slot)
+            if key:
+                a.setShortcut(QKeySequence(key))
+                self.addAction(a)  # so the shortcut works even while its menu is closed
+            a.setToolTip(f"{tip or text}" + (f"  ({QKeySequence(key).toString()})" if key else ""))
+            return a
+
+        def ghost(widget):
+            widget.setObjectName("Ghost")
+            widget.setCursor(Qt.CursorShape.PointingHandCursor)
+            return widget
+
+        self.addAction(act("Open deck…", self.open_deck, QKeySequence.StandardKey.Open))
+        tmpl = ghost(QToolButton(text="Templates  ▾"))
+        tmpl.setToolTip("Start from a ready-made design, or open and save your own")
+        tmpl.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        menu = QMenu(self)
+        menu.addSection("Start from")
+        for name, path in settings.builtin_templates().items():
+            try:
+                label = Template.load(path).name
+            except Exception:
+                label = name
+            menu.addAction(label, lambda p=path: self._load_template(p, builtin=True))
+        menu.addSeparator()
+        menu.addAction(act("Open template…", self.open_template, "Ctrl+Shift+O"))
+        menu.addAction(act("Save template", self.save_template, QKeySequence.StandardKey.Save))
+        menu.addAction(act("Save template as…", self.save_template_as, QKeySequence.StandardKey.SaveAs))
+        tmpl.setMenu(menu)
+        h.addWidget(tmpl)
+        self.undo_act = act("↶", self.undo, QKeySequence.StandardKey.Undo, "Undo")
+        self.redo_act = act("↷", self.redo, QKeySequence.StandardKey.Redo, "Redo")
+        for a in (self.undo_act, self.redo_act):
+            b = ghost(QToolButton())
+            b.setDefaultAction(a)
+            b.setStyleSheet("font-size: 15px;")
+            h.addWidget(b)
+        h.addStretch(1)
+        help_btn = ghost(QToolButton())
+        help_btn.setDefaultAction(act("Help", lambda: HelpDialog(self).exec(),
+                                      QKeySequence.StandardKey.HelpContents,
+                                      "How Cardsmith works, and colour changes in Cura"))
+        h.addWidget(help_btn)
+        h.addSpacing(6)
+        self.export_btn = QPushButton("Export for printing")
+        self.export_btn.setObjectName("Primary")
+        self.export_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.export_btn.setShortcut(QKeySequence("Ctrl+E"))
+        self.export_btn.setToolTip("Build plates for your slicer, with the colour changes worked out  (Ctrl+E)")
+        self.export_btn.clicked.connect(self.export)
+        h.addWidget(self.export_btn)
+        return head
+
+    def _build_deck_card(self) -> QWidget:
+        card = QFrame(objectName="DeckCard")
+        card.setToolTip("The spreadsheet your cards come from")
+        h = QHBoxLayout(card)
+        h.setContentsMargins(12, 10, 10, 10)
+        h.setSpacing(10)
+        icon = QLabel("▦", objectName="DeckIcon")
+        icon.setFixedSize(38, 38)
+        icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        h.addWidget(icon)
+        txt = QVBoxLayout()
+        txt.setSpacing(0)
+        self.deck_name = QLabel("No deck yet", objectName="Title")
+        self.deck_name.setMinimumWidth(80)
+        self.deck_btn = QPushButton("Open a spreadsheet to start")
+        self.deck_btn.setObjectName("Link")
+        self.deck_btn.setCheckable(True)
+        self.deck_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.deck_btn.setToolTip("Show every card – untick the ones you don't want to print")
+        self.deck_btn.toggled.connect(lambda on: self._show_drawer(on, 0))
+        txt.addWidget(self.deck_name)
+        txt.addWidget(self.deck_btn, 0, Qt.AlignmentFlag.AlignLeft)
+        h.addLayout(txt, 1)
+        change = QPushButton("Change…")
+        change.setCursor(Qt.CursorShape.PointingHandCursor)
+        change.setToolTip("Open a different spreadsheet: CSV, TSV, Anki export or JSON  (Ctrl+O)")
+        change.clicked.connect(self.open_deck)
+        h.addWidget(change)
+        return _inset(card, left=16, right=16)
 
     def _build_welcome(self) -> QFrame:
-        w = QFrame()
+        w = floating(QFrame())
         w.setObjectName("Welcome")
-        w.setMaximumWidth(520)
+        w.setMaximumWidth(500)
         v = QVBoxLayout(w)
-        v.setContentsMargins(28, 24, 28, 24)
-        v.setSpacing(12)
-        title = QLabel("Welcome to Cardsmith")
+        v.setContentsMargins(32, 28, 32, 28)
+        v.setSpacing(14)
+        title = QLabel("Make flashcards you can print")
         title.setObjectName("Big")
         v.addWidget(title)
-        v.addWidget(QLabel("Turn a spreadsheet into 3D-printable flashcards in three steps.", objectName="Muted"))
+        v.addWidget(QLabel("Turn any spreadsheet into multi-colour, 3D-printed cards in three steps.",
+                           objectName="Muted", wordWrap=True))
+        v.addSpacing(4)
         steps = (
             ("Open your spreadsheet", "Any CSV, TSV or Anki export. Each column can go on the card."),
-            ("Choose what goes where", "Pick a line of text on the left, or just drag it in the preview."),
-            ("Export for printing", "You get plates ready for Cura, with the colour changes worked out."),
+            ("Make it yours", "Pick a template, then drag text around and choose your colours."),
+            ("Export for printing", "Plates ready for Cura, with the filament swaps worked out."),
         )
         for n, (head, sub) in enumerate(steps, start=1):
             row = QHBoxLayout()
+            row.setSpacing(12)
             num = QLabel(str(n), objectName="Step")
             num.setFixedSize(26, 26)
             num.setAlignment(Qt.AlignmentFlag.AlignCenter)
             row.addWidget(num, 0, Qt.AlignmentFlag.AlignTop)
-            txt = QLabel(f"<b>{head}</b><br><span style='color:gray'>{sub}</span>")
+            txt = QLabel(f"<b>{head}</b><br>{sub}")
+            txt.setObjectName("Muted")
             txt.setWordWrap(True)
             row.addWidget(txt, 1)
             v.addLayout(row)
         btns = QHBoxLayout()
-        sample = QPushButton("Look around with the sample deck")
+        sample = QPushButton("Try the sample deck")
+        sample.setToolTip("Look around with 80 JLPT N5 kanji")
         sample.clicked.connect(lambda: self._show_welcome(False))
         mine = QPushButton("Open my spreadsheet…")
         mine.setObjectName("Primary")
@@ -285,7 +431,7 @@ class MainWindow(QMainWindow):
         btns.addWidget(sample)
         btns.addStretch(1)
         btns.addWidget(mine)
-        v.addSpacing(6)
+        v.addSpacing(8)
         v.addLayout(btns)
         w.setVisible(not self.qs.value("ui/welcomed", False, type=bool))
         return w
@@ -295,6 +441,22 @@ class MainWindow(QMainWindow):
         if not on:
             self.qs.setValue("ui/welcomed", True)
 
+    def _show_page(self, i: int) -> None:
+        self.pages.setCurrentIndex(i)
+        self.page_tabs.set_index(i)
+
+    def _escape(self) -> None:
+        if self.welcome.isVisible():
+            self._show_welcome(False)
+        elif self.drawer.isVisible():
+            self._show_drawer(False)
+
+    def _toast(self, text: str, ms: int = 4000) -> None:
+        self.toast.setText(text)
+        self.toast.adjustSize()
+        self.toast.show()
+        self._toast_timer.start(ms)
+
     def _show_drawer(self, on: bool, tab: int | None = None) -> None:
         if tab is not None:
             self.check_tabs.setCurrentIndex(tab)
@@ -302,7 +464,7 @@ class MainWindow(QMainWindow):
             sizes = self.splitter.sizes()
             self.drawer.show()
             if len(sizes) == 3 and sizes[2] < 200:
-                self.splitter.setSizes([sizes[0], max(400, sizes[1] - 340), 340])
+                self.splitter.setSizes([sizes[0], max(400, sizes[1] - 360), 360])
         elif not on:
             self.drawer.hide()
         with QSignalBlocker(self.deck_btn):
@@ -312,7 +474,7 @@ class MainWindow(QMainWindow):
     def _update_pill(self, lay: CardLayout) -> None:
         bad = sum(1 for i in lay.issues if i.level in ("error", "warning"))
         if bad:
-            self.pill.setText(f"⚠  {bad} thing{'s' if bad != 1 else ''} to check on this card")
+            self.pill.setText(f"⚠  {bad} thing{'s' if bad != 1 else ''} to check")
             self.pill.setObjectName("PillWarn")
         else:
             self.pill.setText("✓  Ready to print")
@@ -322,62 +484,13 @@ class MainWindow(QMainWindow):
 
     def _update_deck_button(self) -> None:
         if not self.deck:
-            self.deck_btn.setText("Cards")
+            self.deck_name.setText("No deck yet")
+            self.deck_btn.setText("Open a spreadsheet to start")
             return
         n, sel = len(self.deck), sum(self.deck.included)
-        self.deck_btn.setText(f"{n} cards" if sel == n else f"{sel} of {n} cards")
-
-    def _build_toolbar(self) -> None:
-        tb = self.addToolBar("Main")
-        tb.setMovable(False)
-        tb.setIconSize(QSize(18, 18))
-        tb.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
-        brand = QLabel("  札 <b>Cardsmith</b>  ")
-        brand.setStyleSheet(f"font-size:16px; color:{theme.ACCENT};")
-        tb.addWidget(brand)
-
-        def act(text, slot, key=None, tip=None):
-            a = QAction(text, self)
-            a.triggered.connect(slot)
-            if key:
-                a.setShortcut(QKeySequence(key))
-            a.setToolTip(f"{tip or text}" + (f"  ({QKeySequence(key).toString()})" if key else ""))
-            return a
-
-        tb.addAction(act("Open deck…", self.open_deck, QKeySequence.StandardKey.Open,
-                         "Open a CSV / TSV / Anki export / JSON"))
-        tmpl = QToolButton()
-        tmpl.setText("Template ▾")
-        tmpl.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
-        menu = QMenu(self)
-        menu.addAction(act("Open template…", self.open_template, "Ctrl+Shift+O"))
-        menu.addAction(act("Save template", self.save_template, QKeySequence.StandardKey.Save))
-        menu.addAction(act("Save template as…", self.save_template_as, QKeySequence.StandardKey.SaveAs))
-        menu.addSection("Start from")
-        for name, path in settings.builtin_templates().items():
-            try:
-                label = Template.load(path).name
-            except Exception:
-                label = name
-            menu.addAction(label, lambda p=path: self._load_template(p, builtin=True))
-        tmpl.setMenu(menu)
-        tb.addWidget(tmpl)
-        self.undo_act = act("↶", self.undo, QKeySequence.StandardKey.Undo, "Undo")
-        self.redo_act = act("↷", self.redo, QKeySequence.StandardKey.Redo, "Redo")
-        tb.addAction(self.undo_act)
-        tb.addAction(self.redo_act)
-        spacer = QWidget()
-        spacer.setSizePolicy(spacer.sizePolicy().horizontalPolicy().Expanding,
-                             spacer.sizePolicy().verticalPolicy().Preferred)
-        tb.addWidget(spacer)
-        tb.addAction(act("Help", lambda: HelpDialog(self).exec(), QKeySequence.StandardKey.HelpContents,
-                         "How Cardsmith works, and colour changes in Cura"))
-        self.export_btn = QPushButton("Export for printing…")
-        self.export_btn.setObjectName("Primary")
-        self.export_btn.setShortcut(QKeySequence("Ctrl+E"))
-        self.export_btn.setToolTip("Build plates and cards for your slicer  (Ctrl+E)")
-        self.export_btn.clicked.connect(self.export)
-        tb.addWidget(self.export_btn)
+        self.deck_name.setText(_elide(self.deck.name, 26))
+        self.deck_name.setToolTip(self.deck.source)
+        self.deck_btn.setText((f"{n} cards" if sel == n else f"{sel} of {n} cards") + "  ›")
 
     # -------------------------------------------------------------- session
     def _restore_session(self, deck_path: str | None) -> None:
@@ -515,7 +628,7 @@ class MainWindow(QMainWindow):
         self._schedule()
         missing = self._missing_fields()
         if missing:
-            self.status.showMessage(f"Template fields not in this deck: {', '.join(missing)}", 8000)
+            self._toast(f"This deck has no {', '.join(missing)} column – pick one on the Text tab", 8000)
 
     def save_template(self) -> None:
         if self.template_path is None:
@@ -524,7 +637,7 @@ class MainWindow(QMainWindow):
         self.template.save(self.template_path)
         self.dirty = False
         self._update_title()
-        self.status.showMessage(f"Saved {self.template_path}", 4000)
+        self._toast(f"Saved {self.template_path.name}")
 
     def save_template_as(self) -> None:
         from ..export import safe_name
@@ -679,9 +792,9 @@ class MainWindow(QMainWindow):
         if not self._dragging:
             self._check_timer.start()
         pk = plate.pack(self.template.card.width, self.template.card.height, self.printer)
-        self.status_plate.setText(
-            f"{self.template.card.width:g} × {self.template.card.height:g} mm · "
-            f"{pk.capacity} per plate on {self.printer.name}")
+        self.info.setText(
+            f"{self.template.card.width:g} × {self.template.card.height:g} mm  ·  {pk.capacity} per plate  ·  "
+            "drag text to move it")
 
     def _render_plate(self) -> None:
         rows = self._rows()
@@ -697,6 +810,7 @@ class MainWindow(QMainWindow):
         self.preview.show_plate(lays, pk, self.template, self.printer,
                                 f"{self.printer.name} · {pk.bed_w:g} × {pk.bed_d:g} mm · {pk.description}")
         self.nav_label.setText(f"Plate {self.plate_no + 1} of {len(chunks)}  ·  {len(rng)} cards")
+        self.info.setText(f"{pk.capacity} per plate  ·  numbers match the deck")
         self.prev_btn.setEnabled(self.plate_no > 0)
         self.next_btn.setEnabled(self.plate_no < len(chunks) - 1)
 
@@ -737,16 +851,14 @@ class MainWindow(QMainWindow):
         name = it.data(Qt.ItemDataRole.UserRole)
         for i, s in enumerate(self.template.slots):
             if s.name == name:
-                self.tabs.setCurrentWidget(self.slots_panel)
+                self._show_page(0)
                 self.slots_panel.select(i)
                 return
 
     # ----------------------------------------------------------- navigation
     def _set_mode(self, i: int) -> None:
         self.mode = "card" if i == 0 else "plate"
-        self.hint.setText("Drag text to move it · scroll to zoom"
-                          if self.mode == "card" else
-                          "Cards are packed to fit the most per plate · numbers match the deck")
+        self.pill.setVisible(self.mode == "card")
         if self.mode == "plate" and self.deck:
             rows = [r for r, _ in self._rows()]
             pk = plate.pack(self.template.card.width, self.template.card.height, self.printer)
@@ -770,8 +882,9 @@ class MainWindow(QMainWindow):
         self.index = int(i)
         self.deck_panel.select_row(self.index)
         if self.mode != "card":
-            self.mode_group.button(0).setChecked(True)
+            self.mode_tabs.set_index(0)
             self.mode = "card"
+            self.pill.show()
         self._render()
 
     # --------------------------------------------------------- interaction
@@ -779,7 +892,7 @@ class MainWindow(QMainWindow):
         self.preview.update_selection(i)
 
     def _preview_slot_clicked(self, i: int) -> None:
-        self.tabs.setCurrentWidget(self.slots_panel)
+        self._show_page(0)
         if self.slots_panel.current != i:
             self.slots_panel.select(i)
         self.preview.update_selection(i)

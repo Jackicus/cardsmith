@@ -4,7 +4,6 @@ import pytest
 
 from cardsmith.model import (
     Border,
-    Hole,
     Printer,
     Slot,
     Template,
@@ -89,7 +88,7 @@ def test_layer_starting_at_matches_layer_z_table():
 
 
 def _tpl(slots, border=True, palette=None) -> Template:
-    t = Template(border=Border(enabled=border, height=0.4), hole=Hole(enabled=False), slots=slots)
+    t = Template(border=Border(enabled=border, height=0.4), slots=slots)
     if palette is not None:
         t.palette = palette
     return t
@@ -178,8 +177,7 @@ def test_colour_changes_none_when_single_colour():
 def test_template_toml_round_trip(tmp_path):
     t = Template(
         name="Round trip",
-        border=Border(enabled=True, width=1.5, inset=0.5, height=0.6, around_hole=False),
-        hole=Hole(enabled=True, diameter=4.0, position="top-right", offset=6.0),
+        border=Border(enabled=True, width=1.5, inset=0.5, height=0.6),
         slots=[
             Slot("Word", "{word|kanji}", size=20, y=30, ruby=True),
             Slot("Meaning", "{meaning}", fit="wrap", max_lines=3, align="left", x_offset=1.5, enabled=False),
@@ -192,6 +190,15 @@ def test_template_toml_round_trip(tmp_path):
     loaded = Template.load(path)
     assert loaded == t
     assert loaded is not t
+
+
+def test_template_with_old_hole_settings_still_loads():
+    """Templates saved before the ring hole was removed keep loading."""
+    d = Template(slots=[Slot("A")]).to_dict()
+    d["border"]["around_hole"] = True
+    d["hole"] = {"enabled": True, "diameter": 4.5, "position": "top-left", "offset": 7.0}
+    t = Template.from_dict(d)
+    assert t.slots[0].name == "A" and not hasattr(t, "hole")
 
 
 def test_template_from_dict_ignores_unknown_keys():

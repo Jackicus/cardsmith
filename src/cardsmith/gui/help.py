@@ -7,16 +7,22 @@ from PySide6.QtWidgets import QDialog, QDialogButtonBox, QTextBrowser, QVBoxLayo
 GUIDE = """
 # Cardsmith in one minute
 
-1. **Open a deck** – any CSV/TSV, an Anki *Notes in Plain Text* export, or JSON. Every column becomes a
-   field you can place on the card.
-2. **Text tab** – each *slot* is a line of raised text. Set its text to `{column}` (use the **{ }** button),
-   pick a font and size, and drag it around in the preview. Long text can shrink or wrap.
-3. **Card tab** – size, thickness, rounded corners, a raised border and an optional hole for a ring.
-4. **Colours tab** – pick filament colours for each height (see below).
-5. **Printer tab** – your bed size and layer heights. Cardsmith packs as many cards per plate as fit,
-   turning some sideways when that squeezes more in.
-6. **Export** – you get plates ready for Cura (`plate_01.3mf` …), optional single-card files, and a
-   `PRINT_GUIDE.md` with the exact filament-change layers.
+1. **Open a deck** – the card at the top left. Any CSV/TSV, an Anki *Notes in Plain Text* export, or
+   JSON. Every column becomes a field you can place on the card. Click **80 cards ›** to untick cards
+   you don't want to print.
+2. **Templates** (top bar) – start from *Kanji flashcard*, *Vocab with furigana*, *Minimal*,
+   *Element tile* or *Language pair*.
+3. **Text** – each line of raised text. Set it to `{column}` (use the **{ }** button), pick a font and
+   size, and drag it around in the preview. Long text can shrink or wrap.
+4. **Card** – size, thickness, rounded corners and a raised border.
+5. **Colours** – pick a filament colour for each height (see below).
+6. **Printer** – your bed size and layer heights. Cardsmith packs as many cards per plate as fit,
+   turning some sideways when that squeezes more in. Switch the preview to **Plate** to see it.
+7. **Export for printing** – plates ready for Cura (`plate_01.3mf` …), optional single-card files, and
+   a `PRINT_GUIDE.md` with the exact filament-change layers.
+
+Hover over anything for a tip. **Page Up / Page Down** step through the cards, **Ctrl+Z** undoes,
+**Ctrl+E** exports, and **Esc** closes the side drawer.
 
 ## How the colours work
 

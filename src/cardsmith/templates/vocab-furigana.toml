@@ -16,13 +16,6 @@ enabled = true
 width = 1.4
 inset = 1.2
 height = 0.4
-around_hole = true
-
-[hole]
-enabled = true
-diameter = 4.5
-position = "top-left"
-offset = 7.0
 
 # Word with Anki-style furigana, e.g. 食[た]べ 物[もの]. Kana-only words
 # (no brackets) are simply printed big.

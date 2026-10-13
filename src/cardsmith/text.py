@@ -17,7 +17,8 @@ from __future__ import annotations
 import html
 import re
 
-FURIGANA = re.compile(r" ?([^ >\[\]]+?)\[([^\]]+)\]")
+# ``漢字[かんじ]``: the base must contain a CJK character, so ``x[i]`` or ``Fe[III]`` stay as written.
+FURIGANA = re.compile(r" ?([^ >\[\]]*?[々〆〇ぁ-ヿ㐀-鿿豈-﫿][^ >\[\]]*?)\[([^\]]+)\]")
 FIELD = re.compile(r"\{([^{}]*)\}")
 TAG = re.compile(r"<[^>]+>")
 

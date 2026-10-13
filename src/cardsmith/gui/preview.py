@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from PySide6.QtCore import QPointF, QRectF, Qt, Signal
 from PySide6.QtGui import (
-    QBrush,
     QColor,
     QFont,
     QPainter,
@@ -20,6 +19,8 @@ from ..layout import CardLayout
 from ..model import Template, height_bands
 from ..plate import PlateLayout
 from . import theme
+
+FIT_PAD = (32, 70)  # px kept clear around the content when fitting (x, y)
 
 
 def geom_path(g, height: float) -> QPainterPath:
@@ -201,7 +202,22 @@ class Preview(QGraphicsView):
         self.apply_theme()
 
     def apply_theme(self) -> None:
-        self.setBackgroundBrush(QBrush(QColor(theme.colours()["canvas"])))
+        c = theme.colours()
+        self._bg = QColor(c["canvas"])
+        self._dots = QColor(c["canvas_dots"])
+        self.viewport().update()
+
+    def drawBackground(self, p: QPainter, rect: QRectF) -> None:
+        # A dotted canvas fixed to the screen (not the scene), like a design tool.
+        p.save()
+        p.resetTransform()
+        vp = self.viewport().rect()
+        p.fillRect(vp, self._bg)
+        step = 22
+        p.setPen(QPen(self._dots, 2))
+        p.drawPoints([QPointF(x, y) for x in range(step // 2, vp.width(), step)
+                      for y in range(step // 2, vp.height(), step)])
+        p.restore()
 
     # -- content ----------------------------------------------------------
     def show_card(self, lay: CardLayout, template: Template, printer, *, show_issues=True,
@@ -248,9 +264,17 @@ class Preview(QGraphicsView):
             self.fit()
 
     def fit(self) -> None:
-        if self._scene_rect.isNull():
+        """Zoom to show everything, leaving room for the bars floating over the canvas."""
+        r = self._scene_rect
+        if r.isNull() or r.width() <= 0 or r.height() <= 0:
             return
-        self.fitInView(self._scene_rect, Qt.AspectRatioMode.KeepAspectRatio)
+        vp = self.viewport().rect()
+        w, h = vp.width() - 2 * FIT_PAD[0], vp.height() - 2 * FIT_PAD[1]
+        if w <= 0 or h <= 0:
+            return
+        s = min(w / r.width(), h / r.height())
+        self.setTransform(QTransform.fromScale(s, s))
+        self.centerOn(r.center())
         self._auto_fit = True
 
     def resizeEvent(self, e) -> None:

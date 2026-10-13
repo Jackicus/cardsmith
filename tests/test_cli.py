@@ -4,7 +4,7 @@ import pytest
 
 from cardsmith import __version__
 from cardsmith.cli import main
-from cardsmith.model import Border, Hole, Template
+from cardsmith.model import Border, Template
 
 
 @pytest.fixture
@@ -19,7 +19,7 @@ def deck(tmp_path):
 def plain_template(tmp_path):
     """A text-free template so these tests run without CJK fonts."""
     p = tmp_path / "plain.toml"
-    Template(name="Plain", border=Border(enabled=True), hole=Hole(enabled=False), slots=[]).save(p)
+    Template(name="Plain", border=Border(enabled=True), slots=[]).save(p)
     return p
 
 
@@ -116,3 +116,31 @@ def test_missing_template(deck):
 def test_missing_deck(tmp_path, plain_template):
     with pytest.raises(SystemExit):
         main(["check", str(tmp_path / "nope.csv"), "-t", str(plain_template)])
+
+
+@pytest.mark.parametrize("flag", [["--layer-height", "0"], ["--gap", "-10"], ["--nozzle", "-0.4"]])
+def test_bad_printer_numbers_are_rejected(deck, plain_template, flag):
+    with pytest.raises(SystemExit) as e:
+        main(["check", str(deck), "-t", str(plain_template), *flag])
+    assert "printer" in str(e.value.code)
+
+
+def test_limit_zero_means_no_cards(deck, plain_template, capsys):
+    main(["check", str(deck), "-t", str(plain_template), "--limit", "0"])
+    assert "0 of 0 cards" in capsys.readouterr().out
+
+
+def test_missing_column_warns(deck, tmp_path, capsys):
+    from cardsmith.model import Slot
+
+    p = tmp_path / "t.toml"
+    Template(name="T", slots=[Slot("X", "{nope}")]).save(p)
+    main(["check", str(deck), "-t", str(p), "--fast"])
+    assert "no nope column" in capsys.readouterr().err
+
+
+def test_doctor(capsys):
+    code = main(["doctor"])
+    out = capsys.readouterr().out
+    assert "Python 3.11+" in out and "manifold3d" in out
+    assert code in (0, 1)

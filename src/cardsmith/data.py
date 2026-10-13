@@ -49,15 +49,39 @@ def _looks_like_header(first: list[str], rest: list[list[str]]) -> bool:
     return ascii_like >= max(1, len(first) // 2 + 1) and not any(c.strip().isdigit() for c in first)
 
 
+# Header lines Anki writes at the top of a "Notes in Plain Text" export.
+ANKI_DIRECTIVES = {"separator", "html", "columns", "tags column", "notetype column", "deck column",
+                   "guid column", "notetype", "deck", "tags"}
+
+
+def _decode(raw: bytes) -> str:
+    """UTF-8 (with or without BOM), UTF-16 from Excel's "Unicode Text", else Windows-1252."""
+    if raw.startswith((b"\xff\xfe", b"\xfe\xff")):
+        return raw.decode("utf-16")
+    try:
+        return raw.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        return raw.decode("cp1252", errors="replace")
+
+
+def _anki_directive(line: str) -> tuple[str, str] | None:
+    if not line.startswith("#"):
+        return None
+    k, sep, v = line[1:].partition(":")
+    k = k.strip().lower()
+    return (k, v.strip()) if sep and k in ANKI_DIRECTIVES else None
+
+
 def load_deck(path: str | Path, has_header: bool | None = None) -> Deck:
     p = Path(path)
-    raw = p.read_bytes()
-    text = raw.decode("utf-8-sig", errors="replace")
+    text = _decode(p.read_bytes())
 
     if p.suffix.lower() == ".json":
         data = json.loads(text)
         if isinstance(data, dict):
             data = data.get("cards", data.get("rows", []))
+        if not isinstance(data, list) or not all(isinstance(i, dict) for i in data):
+            raise ValueError("a JSON deck must be a list of objects, e.g. [{\"word\": \"日\"}, …]")
         rows = [{str(k): "" if v is None else str(v) for k, v in item.items()} for item in data]
         cols: list[str] = []
         for r in rows:
@@ -69,9 +93,9 @@ def load_deck(path: str | Path, has_header: bool | None = None) -> Deck:
     # Anki exports start with "#key:value" directives.
     lines = text.splitlines()
     directives: dict[str, str] = {}
-    while lines and lines[0].startswith("#") and ":" in lines[0]:
-        k, _, v = lines.pop(0)[1:].partition(":")
-        directives[k.strip().lower()] = v.strip()
+    while lines and (d := _anki_directive(lines[0])):
+        lines.pop(0)
+        directives[d[0]] = d[1]
     body = "\n".join(lines)
 
     sep = {"tab": "\t", "comma": ",", "semicolon": ";", "pipe": "|", "space": " "}.get(

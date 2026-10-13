@@ -13,7 +13,7 @@ from shapely.geometry import Point, Polygon, box
 from cardsmith import mesh as ms
 from cardsmith.export import Cancelled, ExportOptions, card_solid, colour_plan_lines, cura_steps, export_deck
 from cardsmith.layout import layout_card
-from cardsmith.model import Border, Hole, Printer, Template, colour_changes
+from cardsmith.model import Border, Printer, Template, colour_changes
 from cardsmith.settings import default_template
 
 NS = {"m": "http://schemas.microsoft.com/3dmanufacturing/core/2015/02"}
@@ -147,11 +147,10 @@ def test_write_3mf_without_colours(tmp_path):
 
 
 def _plain_template() -> Template:
-    """No text, so it needs no fonts: base + border + hole."""
+    """No text, so it needs no fonts: base + border."""
     t = Template(
         name="Plain",
         border=Border(enabled=True, width=1.5, height=0.4),
-        hole=Hole(enabled=True, diameter=4.0),
         slots=[],
     )
     t.palette = ["#FFFFFF", "#000000"]
@@ -246,7 +245,7 @@ def test_card_solid_is_valid_manifold():
     base_area = lay.features[0].geom.area
     border_area = lay.features[1].geom.area
     assert s.volume() == pytest.approx(base_area * 1.2 + border_area * 0.4, rel=1e-3)
-    assert s.genus() == 1  # the hanging hole
+    assert s.genus() == 0
 
 
 @pytest.mark.usefixtures("cjk_face")

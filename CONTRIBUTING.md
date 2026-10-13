@@ -37,12 +37,12 @@ Tests must not import PySide6 – keep GUI code out of the engine modules.
 | `src/cardsmith/export.py` | Whole-deck export: plates, single cards, manifest, print guide |
 | `src/cardsmith/data.py` | Loading CSV / TSV / Anki exports / JSON |
 | `src/cardsmith/settings.py`, `cli.py` | Saved printer profiles, built-in templates, command line |
-| `src/cardsmith/gui/` | PySide6 app |
+| `src/cardsmith/gui/` | PySide6 app: `app.py` (window), `panels.py` (sidebar tabs), `preview.py` (canvas), `theme.py` (look and feel), `widgets.py` (segmented control, collapsible sections) |
 | `tests/` | pytest suite (`helpers.py` has shared builders, `conftest.py` the fixtures) |
 
 ## How templates work
 
-1. A template (`templates/*.toml`) describes the card: size, thickness, border, hanging hole, and a list of **slots**.
+1. A template (`templates/*.toml`) describes the card: size, thickness, border, and a list of **slots**.
 2. Each slot is a line of text: `text = "{word|kanji}"` pulls the `word` column and applies filters; `{#}` / `{##}` are the card number / total.
 3. Every slot (and the border) has a `height` above the card; heights are snapped to whole layers of the chosen printer.
 4. Parts that end at the same height form a **colour band**; `palette` gives each band's colour, from the base upwards.
@@ -51,5 +51,7 @@ Tests must not import PySide6 – keep GUI code out of the engine modules.
 ## Pull requests
 
 - Keep changes focused, and add a test for any bug you fix.
-- Don't break the TOML format: unknown keys are ignored, so new fields need sensible defaults.
+- Don't break the TOML format: unknown keys are ignored (that's how old templates with a `[hole]`
+  section still load), so new fields need sensible defaults.
+- Give new controls a tooltip; the app relies on them instead of long labels.
 - Run ruff and pytest before pushing.

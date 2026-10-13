@@ -124,10 +124,10 @@ def write_3mf(path: str | Path, objects: list[tuple[str, MeshData, str | None]],
         out.append(f'  <object id="{oid}" type="model" name={quoteattr(name)}{attrs}>')
         out.append("   <mesh>")
         out.append("    <vertices>")
-        out.extend(f'     <vertex x="{x:.4f}" y="{y:.4f}" z="{z:.4f}"/>' for x, y, z in mesh.vertices)
+        out.extend(f'     <vertex x="{x:.4f}" y="{y:.4f}" z="{z:.4f}"/>' for x, y, z in mesh.vertices.tolist())
         out.append("    </vertices>")
         out.append("    <triangles>")
-        out.extend(f'     <triangle v1="{a}" v2="{b}" v3="{c}"/>' for a, b, c in mesh.triangles)
+        out.extend(f'     <triangle v1="{a}" v2="{b}" v3="{c}"/>' for a, b, c in mesh.triangles.tolist())
         out.append("    </triangles>")
         out.append("   </mesh>")
         out.append("  </object>")
@@ -136,7 +136,8 @@ def write_3mf(path: str | Path, objects: list[tuple[str, MeshData, str | None]],
     out.extend(f'  <item objectid="{i + 2}"/>' for i in range(len(objects)))
     out.append(" </build>")
     out.append("</model>")
-    with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as z:
+    # Light compression: much faster, and the files are only slightly bigger.
+    with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED, compresslevel=1) as z:
         z.writestr("[Content_Types].xml", _CT)
         z.writestr("_rels/.rels", _RELS)
         z.writestr("3D/3dmodel.model", "\n".join(out))

@@ -15,13 +15,6 @@ enabled = true
 width = 1.4
 inset = 1.2
 height = 0.4
-around_hole = true
-
-[hole]
-enabled = true
-diameter = 4.5
-position = "top-left"
-offset = 7.0
 
 [[slots]]
 name = "Word"

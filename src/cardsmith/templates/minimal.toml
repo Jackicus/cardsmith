@@ -14,9 +14,6 @@ padding = 4.0
 [border]
 enabled = false
 
-[hole]
-enabled = false
-
 [[slots]]
 name = "Word"
 text = "{word}"

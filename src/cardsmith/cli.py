@@ -30,10 +30,10 @@ def _printer(args):
             sys.exit("--bed must look like 220x220")
         p.bed_width, p.bed_depth = w, d
         p.name = f"Custom {w:g} × {d:g}"
-    for attr in ("margin", "gap", "nozzle", "layer_height", "first_layer_height"):
-        v = getattr(args, attr, None)
-        if v is not None:
-            setattr(p, attr, v)
+    overrides = {a: getattr(args, a, None) for a in ("margin", "gap", "nozzle", "layer_height", "first_layer_height")}
+    overrides = {k: v for k, v in overrides.items() if v is not None}
+    if overrides:
+        p = Printer.from_dict({**p.to_dict(), **overrides})  # validates the new values
     return p
 
 
@@ -42,9 +42,20 @@ def _deck_rows(args):
 
     deck = load_deck(args.deck, has_header={"auto": None, "yes": True, "no": False}[args.header])
     rows = deck.selected()
-    if args.limit:
-        rows = rows[: args.limit]
+    if args.limit is not None:
+        rows = rows[: max(0, args.limit)]
     return deck, rows
+
+
+def _warn_missing_columns(template, deck) -> None:
+    from .text import fields_in
+
+    cols = {c.lower() for c in deck.columns}
+    missing = sorted({f for s in template.slots if s.enabled for f in fields_in(s.text)
+                      if f not in ("#", "##") and f.lower() not in cols})
+    if missing:
+        print(f"warning: the deck has no {', '.join(missing)} column(s); those lines will be blank. "
+              f"Columns: {', '.join(deck.columns)}", file=sys.stderr)
 
 
 def cmd_build(args) -> int:
@@ -54,6 +65,7 @@ def cmd_build(args) -> int:
     template = resolve_template(args.template)
     printer = _printer(args)
     deck, rows = _deck_rows(args)
+    _warn_missing_columns(template, deck)
     out = Path(args.out or f"{deck.name}-cards")
     opts = ExportOptions(
         plates_3mf=not args.no_plates,
@@ -86,10 +98,11 @@ def cmd_check(args) -> int:
 
     template = resolve_template(args.template)
     printer = _printer(args)
-    _, rows = _deck_rows(args)
+    deck, rows = _deck_rows(args)
+    _warn_missing_columns(template, deck)
     bad = 0
     for idx, row in rows:
-        lay = layout_card(template, printer, row, idx, len(rows), check_print=not args.fast)
+        lay = layout_card(template, printer, row, idx, len(deck), check_print=not args.fast)
         issues = [i for i in lay.issues if i.level != "info" or args.verbose]
         if issues:
             bad += 1
@@ -128,6 +141,62 @@ def cmd_fonts(args) -> int:
                 continue
         print(f"{ref.key:50} {ref.path}")
     return 0
+
+
+def cmd_doctor(args) -> int:
+    """Check the things Cardsmith needs, and say how to fix what's missing."""
+    import platform
+    from importlib import metadata
+
+    from . import fonts, settings, slicer
+
+    problems = 0
+
+    def line(ok: bool | None, what: str, detail: str = "") -> None:
+        nonlocal problems
+        mark = {True: "✓", False: "✗", None: "–"}[ok]
+        problems += ok is False
+        print(f" {mark} {what:<22} {detail}")
+
+    print(f"Cardsmith {__version__} on Python {platform.python_version()} ({platform.system()})\n")
+    line(sys.version_info >= (3, 11), "Python 3.11+", platform.python_version())
+    for pkg in ("fonttools", "shapely", "manifold3d", "numpy", "tomli-w"):
+        try:
+            line(True, pkg, metadata.version(pkg))
+        except metadata.PackageNotFoundError:
+            line(False, pkg, f"missing – pip install {pkg}")
+    try:
+        import PySide6
+
+        line(True, "PySide6 (the app)", PySide6.__version__)
+    except ImportError:
+        line(None, "PySide6 (the app)", "not installed – command line only. pip install 'cardsmith[gui]'")
+
+    n_fonts = len(fonts.registry.all())
+    line(n_fonts > 0, "Fonts", f"{n_fonts} found" if n_fonts else "none found – install some fonts")
+    template = settings.default_template()
+    for spec in dict.fromkeys(s.font for s in template.slots):
+        ok = fonts.try_face(spec) is not None
+        line(ok, "Default template font", spec if ok else f"{spec} not found – install Noto Sans CJK JP "
+             "(fonts-noto-cjk / noto-fonts-cjk) or pick another font in the app")
+    ja = next((r.key for r in fonts.registry.all() if "CJK JP" in r.family), None)
+    line(True if ja else None, "Japanese font", ja or "none – only needed for Japanese text")
+
+    cura = slicer.find_cura()
+    line(True if cura else None, "Cura", " ".join(cura) if cura else
+         "not found – only needed for 'Open in Cura'. Set CARDSMITH_CURA=/path/to/cura")
+    cfg = "the settings folder"
+    try:
+        cfg = settings.config_dir()
+        probe = cfg / ".write-test"
+        probe.write_text("ok")
+        probe.unlink()
+        line(True, "Settings folder", str(cfg))
+    except OSError as e:
+        line(False, "Settings folder", f"{cfg} is not writable ({e})")
+
+    print("\nAll good." if not problems else f"\n{problems} problem{'s' if problems != 1 else ''} found.")
+    return 1 if problems else 0
 
 
 def cmd_gui(args) -> int:
@@ -177,6 +246,7 @@ def main(argv: list[str] | None = None) -> int:
     f = sub.add_parser("fonts", help="list installed fonts")
     f.add_argument("--ja", action="store_true", help="only fonts with Japanese glyphs")
     f.set_defaults(fn=cmd_fonts)
+    sub.add_parser("doctor", help="check fonts, the app and Cura are set up").set_defaults(fn=cmd_doctor)
     g = sub.add_parser("gui", help="open the app (default)")
     g.add_argument("deck", nargs="?")
     g.set_defaults(fn=cmd_gui)

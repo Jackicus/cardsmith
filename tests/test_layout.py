@@ -4,10 +4,10 @@ import math
 
 import pytest
 from helpers import CJK_FONT, simple_template
-from shapely.geometry import Point, Polygon, box
+from shapely.geometry import Point, box
 
-from cardsmith.layout import border_shape, card_outline, hole_centre, layout_card, print_problems
-from cardsmith.model import Border, Hole, Printer, Slot, Template
+from cardsmith.layout import border_shape, card_outline, layout_card, print_problems
+from cardsmith.model import Border, Printer, Slot, Template
 from cardsmith.settings import default_template
 
 needs_cjk = pytest.mark.usefixtures("cjk_face")
@@ -172,52 +172,23 @@ def test_ruby_slot_places_reading_above():
     assert ruby.label == "漢字"
 
 
-@needs_cjk
-def test_hole_cuts_card():
-    t = simple_template()
-    t.hole = Hole(enabled=True, diameter=5.0, position="top-left", offset=6.0)
-    lay = layout_card(t, Printer(), {"word": "日"}, check_print=False)
-    hx, hy = hole_centre(t)
-    assert (hx, hy) == (6.0, 80.0)
-    base = lay.features[0]
-    assert not base.geom.contains(Point(hx, hy))
-    outline = card_outline(54, 86, 3)
-    assert base.geom.area == pytest.approx(outline.area - math.pi * 2.5**2, rel=2e-3)
-
-
-@pytest.mark.parametrize(
-    ("pos", "expected"),
-    [("top-left", (5.5, 80.5)), ("bottom-right", (48.5, 5.5)), ("top-center", (27.0, 80.5)),
-     ("center-left", (5.5, 43.0))],
-)
-def test_hole_positions(pos, expected):
-    t = Template(hole=Hole(enabled=True, position=pos, offset=5.5))
-    assert hole_centre(t) == expected
-
-
 def test_border_ring_area():
     w, h, r, bw = 54.0, 86.0, 4.0, 1.5
-    t = Template(border=Border(enabled=True, width=bw, inset=0.0), hole=Hole(enabled=False))
+    t = Template(border=Border(enabled=True, width=bw, inset=0.0))
     outline = card_outline(w, h, r)
-    ring = border_shape(t, outline, Polygon())
+    ring = border_shape(t, outline)
     expected = (w * h - (4 - math.pi) * r * r) - ((w - 2 * bw) * (h - 2 * bw) - (4 - math.pi) * (r - bw) ** 2)
     assert ring.area == pytest.approx(expected, rel=5e-3)
     assert ring.within(outline.buffer(1e-6))
 
 
-def test_border_with_inset_and_hole_ring():
-    t = Template(
-        border=Border(enabled=True, width=1.0, inset=1.0, around_hole=True),
-        hole=Hole(enabled=True, diameter=4.0, position="top-left", offset=6.0),
-        slots=[],
-    )
+def test_border_with_inset():
+    t = Template(border=Border(enabled=True, width=1.0, inset=1.0), slots=[])
     lay = layout_card(t, Printer(), {}, check_print=False)
     border = next(f for f in lay.features if f.kind == "border")
     # Inset: the outermost millimetre of the card is clear.
     assert not border.geom.intersects(box(10, 0, 40, 0.9))
-    # Ring around the hole, but not covering the hole itself.
-    assert border.geom.contains(Point(6.0 + 2.5, 80.0))
-    assert not border.geom.contains(Point(6.0, 80.0))
+    assert border.geom.contains(Point(27.0, 1.5))
 
 
 @needs_cjk

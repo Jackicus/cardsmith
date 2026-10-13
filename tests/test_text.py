@@ -113,3 +113,10 @@ def test_wrap_tokens_mixed():
 
 def test_wrap_tokens_long_vowel_mark_sticks():
     assert tx.wrap_tokens("コーヒー") == ["コー", "ヒー"]
+
+
+def test_brackets_without_cjk_are_not_furigana():
+    assert tx.kanji("Fe[III] and x[i]") == "Fe[III] and x[i]"
+    assert not tx.has_ruby("arr[0]")
+    assert tx.kanji("漢字[かんじ]を 見[み]る") == "漢字を見る"
+    assert tx.ruby_segments("見[み]る") == [("見", "み"), ("る", None)]

@@ -181,3 +181,25 @@ def test_duplicate_headers_auto_detected(tmp_path):
     d = load_deck(p)
     assert d.has_header
     assert d.columns == ["word", "note", "note_2"]
+
+
+def test_utf16_and_cp1252_decks(tmp_path):
+    p = tmp_path / "u16.txt"
+    p.write_bytes("word\tmeaning\n犬\tdog\n猫\tcat\n".encode("utf-16"))
+    d = load_deck(p)
+    assert d.columns == ["word", "meaning"] and d.rows[0] == {"word": "犬", "meaning": "dog"}
+    p = tmp_path / "win.csv"
+    p.write_bytes("word,meaning\ncafé,coffee\nniño,child\n".encode("cp1252"))
+    assert load_deck(p).rows[0]["word"] == "café"
+
+
+def test_json_deck_must_be_objects(tmp_path):
+    p = _write(tmp_path, "d.json", "[1, 2]")
+    with pytest.raises(ValueError, match="list of objects"):
+        load_deck(p)
+
+
+def test_hash_line_that_is_not_an_anki_directive_is_data(tmp_path):
+    p = _write(tmp_path, "d.csv", "#1: intro,x\n#2: more,y\n")
+    d = load_deck(p, has_header=False)
+    assert len(d) == 2 and d.rows[0]["col1"] == "#1: intro"

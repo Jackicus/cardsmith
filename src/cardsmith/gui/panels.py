@@ -9,7 +9,6 @@ from PySide6.QtCore import QSignalBlocker, Qt, Signal
 from PySide6.QtGui import QAction, QColor, QIcon, QPixmap
 from PySide6.QtWidgets import (
     QAbstractItemView,
-    QButtonGroup,
     QCheckBox,
     QColorDialog,
     QComboBox,
@@ -38,14 +37,15 @@ from ..colours import PALETTES, colour_name
 from ..model import (
     ALIGNMENTS,
     FIT_MODES,
-    HOLE_POSITIONS,
     Printer,
     Slot,
     Template,
     colour_changes,
     height_bands,
 )
-from .widgets import Section
+from .widgets import Section, Segmented
+
+MARGINS = (16, 12, 16, 16)  # left, top, right, bottom padding of each tab
 
 
 def _spin(lo, hi, step=0.1, suffix=" mm", decimals=1, tip="") -> QDoubleSpinBox:
@@ -177,12 +177,11 @@ class CardPanel(Panel):
         super().__init__(get_template, parent)
         inner = QWidget()
         v = QVBoxLayout(inner)
-        v.setContentsMargins(4, 4, 8, 4)
-        v.setSpacing(6)
+        v.setContentsMargins(*MARGINS)
+        v.setSpacing(0)
         b = self.b
         card = lambda: self.t().card  # noqa: E731
         border = lambda: self.t().border  # noqa: E731
-        hole = lambda: self.t().hole  # noqa: E731
 
         g = Section("Size & shape", key="card.size", expanded=True)
         f = g.form
@@ -191,6 +190,7 @@ class CardPanel(Panel):
         self.h = b.num(_spin(10, 400, 1, " mm", 1, "Card height"), card, "height")
         swap = QToolButton()
         swap.setText("⇄")
+        swap.setObjectName("Ghost")
         swap.setToolTip("Swap width and height (portrait / landscape)")
         swap.clicked.connect(self._swap)
         size_row.addWidget(self.w)
@@ -199,12 +199,14 @@ class CardPanel(Panel):
         size_row.addWidget(swap)
         f.addRow("Size", size_row)
         presets = QComboBox()
+        presets.setToolTip("Start from a standard card size")
         presets.addItem("Common sizes…", None)
         for name, wh in CARD_PRESETS:
             presets.addItem(f"{name}  ({wh[0]:g} × {wh[1]:g})", wh)
         presets.currentIndexChanged.connect(lambda i: self._preset(presets))
         f.addRow("", presets)
-        f.addRow("Corners", b.num(_spin(0, 50, 0.5, tip="Corner radius"), card, "corner_radius"))
+        f.addRow("Corners", b.num(_spin(0, 50, 0.5, tip="How rounded the corners are. 0 = square."),
+                                card, "corner_radius"))
         v.addWidget(g)
 
         g = self.section("Raised border", key="card.border", checkable=True,
@@ -212,23 +214,10 @@ class CardPanel(Panel):
                               "in its own colour.")
         b.check(g.checkbox, border, "enabled")
         f = g.form
-        f.addRow("Width", b.num(_spin(0.2, 20, 0.2), border, "width"))
+        f.addRow("Width", b.num(_spin(0.2, 20, 0.2, tip="How wide the frame is. Keep it at least a nozzle "
+                                                        "width or two."), border, "width"))
         f.addRow("Height", b.num(_spin(0.2, 5, 0.2, " mm", 2, "How far it rises above the card."), border, "height"))
         f.addRow("Inset", b.num(_spin(0, 30, 0.2, tip="Gap between the card edge and the border."), border, "inset"))
-        f.addRow("", b.check(QCheckBox("Ring around the hole"), border, "around_hole"))
-        v.addWidget(g)
-
-        g = self.section("Hole for a ring", key="card.hole", checkable=True,
-                         hint="Handy for keeping a deck on a binder ring or lanyard.")
-        b.check(g.checkbox, hole, "enabled")
-        f = g.form
-        f.addRow("Diameter", b.num(_spin(1, 30, 0.5), hole, "diameter"))
-        pos = QComboBox()
-        for p in HOLE_POSITIONS:
-            pos.addItem(p.replace("-", " ").capitalize(), p)
-        f.addRow("Position", b.combo(pos, hole, "position"))
-        f.addRow("From edge", b.num(_spin(1, 50, 0.5, tip="Distance from the edge to the hole's centre."),
-                                    hole, "offset"))
         v.addWidget(g)
 
         g = self.section("More", key="card.more")
@@ -288,25 +277,31 @@ class SlotsPanel(Panel):
 
         top = QWidget()
         tv = QVBoxLayout(top)
-        tv.setContentsMargins(4, 4, 8, 0)
-        tv.addWidget(_hint("Each line of text on the card. Pick one to edit it, or click it in the preview."))
+        tv.setContentsMargins(MARGINS[0], MARGINS[1], MARGINS[2], 4)
+        tv.setSpacing(8)
+        tv.addWidget(_hint("Each line of text on the card. Pick one to edit it, or click it in the preview. "
+                           "Untick to hide it, drag to reorder."))
         self.list = QListWidget()
         self.list.setDragDropMode(QAbstractItemView.DragDropMode.InternalMove)
         self.list.setMaximumHeight(130)
+        self.list.setToolTip("Lines of text on the card. Tick to show, drag to reorder.")
         self.list.currentRowChanged.connect(self._select)
         self.list.itemChanged.connect(self._item_toggled)
         self.list.model().rowsMoved.connect(self._rows_moved)
         tv.addWidget(self.list)
         row = QHBoxLayout()
-        self.add_btn = QPushButton("＋ Add ▾")
-        self.add_btn.setToolTip("Add a text slot")
+        self.add_btn = QPushButton("＋  Add line")
+        self.add_btn.setToolTip("Add a line of text: a column from your deck, fixed text or the card number")
         self.add_menu = QMenu(self)
         self.add_btn.setMenu(self.add_menu)
         self.add_menu.aboutToShow.connect(self._fill_add_menu)
         dup = QPushButton("Copy")
-        dup.setToolTip("Duplicate this line")
+        dup.setToolTip("Duplicate the selected line")
+        dup.setObjectName("Ghost")
         dup.clicked.connect(self._duplicate)
         rm = QPushButton("Remove")
+        rm.setToolTip("Delete the selected line")
+        rm.setObjectName("Ghost")
         rm.clicked.connect(self._remove)
         row.addWidget(self.add_btn)
         row.addWidget(dup)
@@ -317,8 +312,8 @@ class SlotsPanel(Panel):
 
         self.editor = QWidget()
         ev = QVBoxLayout(self.editor)
-        ev.setContentsMargins(4, 0, 8, 4)
-        ev.setSpacing(6)
+        ev.setContentsMargins(MARGINS[0], 8, MARGINS[2], MARGINS[3])
+        ev.setSpacing(0)
         b = self.b
         s = self.slot
 
@@ -332,7 +327,7 @@ class SlotsPanel(Panel):
             "readings, {col|first} takes the first of a list, {col|upper}. {#} = card number.")
         ins = QToolButton()
         ins.setText("{ }")
-        ins.setToolTip("Insert a column from your deck")
+        ins.setToolTip("Insert a column from your deck, or a filter like |kanji")
         ins.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         self.ins_menu = QMenu(self)
         self.ins_menu.aboutToShow.connect(self._fill_insert_menu)
@@ -345,22 +340,23 @@ class SlotsPanel(Panel):
         self.family.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
         self.family.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
         self.family.setMinimumContentsLength(12)
+        self.family.setToolTip("Font for this line. Japanese-capable fonts are listed first. "
+                               "Bold fonts print most reliably.")
         self.style_box = QComboBox()
+        self.style_box.setToolTip("Heavier weights have thicker strokes, which print more cleanly.")
         self.family.activated.connect(self._family_changed)
         self.family.lineEdit().editingFinished.connect(self._family_changed)
         self.style_box.activated.connect(self._style_changed)
         f.addRow("Font", self.family)
         f.addRow("Weight", self.style_box)
-        f.addRow("Size", b.num(_spin(1, 200, 0.5, tip="Em size, like CSS font-size."), s, "size"))
-        al = QHBoxLayout()
-        self.align_group = QButtonGroup(self)
-        for i, label in enumerate(("Centre", "Left", "Right")):
-            btn = QPushButton(label)
-            btn.setCheckable(True)
-            self.align_group.addButton(btn, i)
-            al.addWidget(btn)
-        self.align_group.idClicked.connect(self._align)
-        f.addRow("Align", al)
+        f.addRow("Size", b.num(_spin(1, 200, 0.5, tip="Text size in mm (the em size, like CSS font-size)."),
+                              s, "size"))
+        align = Segmented(["Centre", "Left", "Right"],
+                          ["Centre on the card", "Line up against the left padding edge",
+                           "Line up against the right padding edge"])
+        self.align_group = align.group
+        align.changed.connect(self._align)
+        f.addRow("Align", align)
         f.addRow("From top", b.num(_spin(-50, 400, 0.5, tip="Vertical centre of the text, from the top edge. "
                                                              "Or just drag the text in the preview."), s, "y"))
         ev.addWidget(g)
@@ -368,35 +364,47 @@ class SlotsPanel(Panel):
         g = self.section("When text is too long", key="text.fit")
         f = g.form
         fit = QComboBox()
+        fit.setToolTip("What happens when this card's text is wider than the space: shrink it, wrap it "
+                       "onto more lines, or leave it (it may run off the card).")
         for m, label in zip(FIT_MODES, ("Shrink to fit", "Wrap onto lines", "Leave as is"), strict=True):
             fit.addItem(label, m)
         f.addRow("Then", b.combo(fit, s, "fit"))
-        f.addRow("Smallest size", b.num(_spin(1, 100, 0.5), s, "min_size"))
+        f.addRow("Smallest size", b.num(_spin(1, 100, 0.5, tip="Never shrink below this. Small text is hard "
+                                                                "to print – 4 mm is a good floor."),
+                                        s, "min_size"))
         ml = QSpinBox()
         ml.setRange(1, 20)
         ml.setMinimumWidth(64)
         ml.setAlignment(Qt.AlignmentFlag.AlignRight)
+        ml.setToolTip("Most lines to wrap onto before shrinking")
         f.addRow("Max lines", b.num(ml, s, "max_lines"))
-        f.addRow("Line spacing", b.num(_spin(0.6, 3, 0.05, "×", 2), s, "line_spacing"))
+        f.addRow("Line spacing", b.num(_spin(0.6, 3, 0.05, "×", 2, "Distance between wrapped lines, "
+                                                                     "as a multiple of the text size."),
+                                       s, "line_spacing"))
         ev.addWidget(g)
 
         g = self.section("Furigana", key="text.ruby", checkable=True,
                          hint="Write readings Anki-style – 漢字[かんじ] – and they print above the kanji.")
         b.check(g.checkbox, s, "ruby")
         f = g.form
-        f.addRow("Size", b.num(_spin(0.2, 1, 0.05, "×", 2), s, "ruby_scale"))
-        f.addRow("Gap", b.num(_spin(-5, 10, 0.1, " mm", 2), s, "ruby_gap"))
+        f.addRow("Size", b.num(_spin(0.2, 1, 0.05, "×", 2, "Reading size, relative to the main text."),
+                               s, "ruby_scale"))
+        f.addRow("Gap", b.num(_spin(-5, 10, 0.1, " mm", 2, "Space between the kanji and the reading above it."),
+                              s, "ruby_gap"))
         ev.addWidget(g)
 
         g = self.section("More", key="text.more")
         f = g.form
-        f.addRow("Name", b.text(QLineEdit(), s, "name"))
+        name = QLineEdit()
+        name.setToolTip("A label for this line, used in the list and in print checks")
+        f.addRow("Name", b.text(name, s, "name"))
         f.addRow("Raised by", b.num(_spin(0.2, 5, 0.2, " mm", 2, "Height above the card. Parts with the same "
                                                                   "height print in the same colour."), s, "height"))
         f.addRow("Sideways", b.num(_spin(-200, 200, 0.5, tip="Offset from centre, or from the padding edge "
                                                               "for left/right alignment."), s, "x_offset"))
         f.addRow("Max width", b.num(_spin(0, 400, 1, tip="0 = full card width minus padding."), s, "max_width"))
-        f.addRow("Letter spacing", b.num(_spin(-5, 20, 0.1, " mm", 2), s, "letter_spacing"))
+        f.addRow("Letter spacing", b.num(_spin(-5, 20, 0.1, " mm", 2, "Extra space between characters."),
+                                         s, "letter_spacing"))
         ev.addWidget(g)
         ev.addStretch(1)
         outer.addWidget(_scroll(self.editor), 1)
@@ -635,10 +643,12 @@ class ColoursPanel(Panel):
         self.p = get_printer
         inner = QWidget()
         self.v = QVBoxLayout(inner)
-        self.v.setContentsMargins(4, 4, 8, 4)
+        self.v.setContentsMargins(*MARGINS)
+        self.v.setSpacing(8)
         self.v.addWidget(_hint("Each height on the card prints in its own colour. Pick a filament for each – "
                                "Cardsmith works out where to swap."))
         pal = QComboBox()
+        pal.setToolTip("Apply a ready-made set of colours")
         pal.addItem("Palette presets…", None)
         for name, cols in PALETTES.items():
             pal.addItem(swatch(cols[-1]), name, cols)
@@ -648,6 +658,8 @@ class ColoursPanel(Panel):
         self.v.addLayout(self.bands_box)
         self.v.addWidget(QLabel("Filament changes", objectName="Section"))
         self.plan = QLabel()
+        self.plan.setToolTip("Where to pause and swap filament. The same steps are in the export window "
+                             "and PRINT_GUIDE.md.")
         self.plan.setWordWrap(True)
         self.plan.setTextFormat(Qt.TextFormat.RichText)
         self.v.addWidget(self.plan)
@@ -670,7 +682,8 @@ class ColoursPanel(Panel):
             btn = QPushButton()
             btn.setFixedSize(38, 30)
             btn.setStyleSheet(f"background:{band.colour}; border:1px solid rgba(0,0,0,60); border-radius:6px;")
-            btn.setToolTip("Pick a colour")
+            btn.setToolTip("Pick the filament colour for this height")
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
             btn.clicked.connect(lambda _=False, i=band.index: self._pick(i))
             h.addWidget(btn)
             what = ", ".join(band.features)
@@ -726,10 +739,12 @@ class PrinterPanel(QWidget):
         self.b = Binder(self.changed.emit)
         inner = QWidget()
         v = QVBoxLayout(inner)
-        v.setContentsMargins(4, 4, 8, 4)
+        v.setContentsMargins(*MARGINS)
+        v.setSpacing(8)
         prow = QHBoxLayout()
         self.profiles = QComboBox()
         self.profiles.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.profiles.setToolTip("Your printer. Presets cover common models; save your own with Save…")
         self.profiles.activated.connect(self._choose)
         save = QToolButton()
         save.setText("Save…")
@@ -737,6 +752,7 @@ class PrinterPanel(QWidget):
         save.clicked.connect(self._save)
         more = QToolButton()
         more.setText("⋯")
+        more.setToolTip("More printer options")
         more.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         mm = QMenu(self)
         act = QAction("Delete saved profile", self)
@@ -753,38 +769,45 @@ class PrinterPanel(QWidget):
         self.summary = QLabel()
         self.summary.setWordWrap(True)
         self.summary.setObjectName("Panel")
-        self.summary.setContentsMargins(10, 8, 10, 8)
+        self.summary.setContentsMargins(12, 10, 12, 10)
         v.addWidget(self.summary)
 
         g = Section("Print bed", key="printer.bed", expanded=True)
         f = g.form
         bed = QHBoxLayout()
-        bed.addWidget(b.num(_spin(50, 1000, 1, " mm", 0), p, "bed_width"))
+        bed.addWidget(b.num(_spin(50, 1000, 1, " mm", 0, "Bed width (X)"), p, "bed_width"))
         bed.addWidget(QLabel("×"))
-        bed.addWidget(b.num(_spin(50, 1000, 1, " mm", 0), p, "bed_depth"))
+        bed.addWidget(b.num(_spin(50, 1000, 1, " mm", 0, "Bed depth (Y)"), p, "bed_depth"))
         f.addRow("Size", bed)
-        f.addRow("", b.check(QCheckBox("Turn cards to fit more"), p, "allow_rotation"))
+        rot = QCheckBox("Turn cards to fit more")
+        rot.setToolTip("Lay some cards sideways when that squeezes more onto the bed")
+        f.addRow("", b.check(rot, p, "allow_rotation"))
         v.addWidget(g)
 
         g = Section("Spacing on the bed", key="printer.spacing")
         f = g.form
         f.addRow("Edge margin", b.num(_spin(0, 50, 0.5, tip="Keep cards this far from the bed edge (clips, "
                                                            "skirt, brim)."), p, "margin"))
-        f.addRow("Between cards", b.num(_spin(0.5, 50, 0.5), p, "gap"))
+        f.addRow("Between cards", b.num(_spin(0.5, 50, 0.5, tip="Space between neighbouring cards."), p, "gap"))
         mx = QSpinBox()
         mx.setRange(0, 999)
         mx.setMinimumWidth(64)
         mx.setSpecialValueText("as many as fit")
         mx.setAlignment(Qt.AlignmentFlag.AlignRight)
+        mx.setToolTip("Cap the number of cards per plate, e.g. to keep print times short")
         f.addRow("Max per plate", b.num(mx, p, "max_per_plate"))
         v.addWidget(g)
 
         g = Section("Slicer settings", key="printer.slicer",
                     hint="Use the same values in Cura, so the colour-change layers line up.")
         f = g.form
-        f.addRow("Nozzle", b.num(_spin(0.1, 2, 0.05, " mm", 2), p, "nozzle"))
-        f.addRow("Layer height", b.num(_spin(0.04, 1, 0.02, " mm", 2), p, "layer_height"))
-        f.addRow("First layer", b.num(_spin(0.04, 1, 0.02, " mm", 2), p, "first_layer_height"))
+        f.addRow("Nozzle", b.num(_spin(0.1, 2, 0.05, " mm", 2, "Nozzle diameter. Used to flag strokes too thin "
+                                                               "to print."), p, "nozzle"))
+        f.addRow("Layer height", b.num(_spin(0.04, 1, 0.02, " mm", 2, "Must match Cura's Layer Height, or the "
+                                                                      "colour changes land on the wrong layer."),
+                                       p, "layer_height"))
+        f.addRow("First layer", b.num(_spin(0.04, 1, 0.02, " mm", 2, "Must match Cura's Initial Layer Height."),
+                                      p, "first_layer_height"))
         mf = _spin(0, 2, 0.05, " mm", 2, "Strokes or gaps thinner than this are flagged.")
         mf.setSpecialValueText("same as nozzle")
         f.addRow("Thinnest stroke", b.num(mf, p, "min_feature"))

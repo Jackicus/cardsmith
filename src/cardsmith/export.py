@@ -145,6 +145,8 @@ def export_deck(
     want_plates = options.plates_3mf or options.plates_colour_3mf or options.plates_stl
     w_plates = 0.7 if (options.singles_stl or options.singles_3mf) else 0.85
     plates_dir = out / "plates"
+    want_singles = options.singles_stl or options.singles_3mf
+    solids: dict[int, dict] = {}  # card solids kept from the plates for the single-card files
     if want_plates:
         plates_dir.mkdir(exist_ok=True)
         _clear(plates_dir, ("plate_*.3mf", "plate_*.stl"))
@@ -156,7 +158,10 @@ def export_deck(
             slot = packing.slots[k]
             manifest.append((idx + 1, lay.label, p, k + 1, slot.x, slot.y, int(slot.rotated)))
             if want_plates:
-                for b, solid in card_bands(lay).items():
+                cb = card_bands(lay)
+                if want_singles:
+                    solids[idx] = cb
+                for b, solid in cb.items():
                     by_band.setdefault(b, []).append(
                         ms.place(solid, slot.x, slot.y, slot.rotated, template.card.height))
             say(0.15 + w_plates * (p - 1 + (k + 1) / len(rng)) / len(chunks),
@@ -187,14 +192,14 @@ def export_deck(
             res.files.append(f)
 
     # 3. Single cards.
-    if options.singles_stl or options.singles_3mf:
+    if want_singles:
         cards_dir = out / "cards"
         cards_dir.mkdir(exist_ok=True)
-        _clear(cards_dir, ("[0-9][0-9][0-9]_*.stl", "[0-9][0-9][0-9]_*.3mf"))
+        _clear(cards_dir, ("[0-9]*_*.stl", "[0-9]*_*.3mf"))
         for n, (idx, lay) in enumerate(layouts):
             check()
             stem = f"{idx + 1:03d}_{safe_name(lay.label)}"
-            bands_solid = card_bands(lay)
+            bands_solid = solids.pop(idx, None) or card_bands(lay)
             if options.singles_stl:
                 f = cards_dir / f"{stem}.stl"
                 ms.write_stl(f, ms.MeshData.of(ms.union(list(bands_solid.values()))), lay.label)
